@@ -219,7 +219,7 @@ class BacktestEngine:
             # Run simulation day by day
             for i in range(len(data)):
                 current_date = data.index[i]
-                current_price = data.iloc[i]['close']
+                current_price = float(data.iloc[i]['close'])
                 
                 # Check for trading signals
                 signal_generated, signal_details = self._get_trading_system().run_strategy_signal(
@@ -234,19 +234,19 @@ class BacktestEngine:
                         # Execute buy
                         shares = current_capital / current_price
                         positions[symbol] = {
-                            'shares': shares,
-                            'entry_price': current_price,
-                            'entry_date': current_date
+                            'shares': float(shares),
+                            'entry_price': float(current_price),
+                            'entry_date': str(current_date)
                         }
                         current_capital = 0
                         
                         trades.append({
-                            'date': current_date,
+                            'date': str(current_date),
                             'symbol': symbol,
                             'action': 'BUY',
-                            'shares': shares,
-                            'price': current_price,
-                            'value': shares * current_price,
+                            'shares': float(shares),
+                            'price': float(current_price),
+                            'value': float(shares * current_price),
                             'strategy': f"{strategy}_{profile}"
                         })
                         
@@ -259,18 +259,18 @@ class BacktestEngine:
                         entry_price = position['entry_price']
                         
                         # Calculate P&L
-                        pnl = (current_price - entry_price) * shares
-                        pnl_pct = ((current_price - entry_price) / entry_price) * 100
+                        pnl = float((current_price - entry_price) * shares)
+                        pnl_pct = float(((current_price - entry_price) / entry_price) * 100)
                         
                         current_capital = shares * current_price
                         
                         trades.append({
-                            'date': current_date,
+                            'date': str(current_date),
                             'symbol': symbol,
                             'action': 'SELL',
-                            'shares': shares,
-                            'price': current_price,
-                            'value': shares * current_price,
+                            'shares': float(shares),
+                            'price': float(current_price),
+                            'value': float(shares * current_price),
                             'pnl': pnl,
                             'pnl_pct': pnl_pct,
                             'strategy': f"{strategy}_{profile}"
@@ -281,15 +281,15 @@ class BacktestEngine:
                         self.logger.info(f"SELL {shares:.2f} shares of {symbol} at ${current_price:.2f} (P&L: ${pnl:.2f}, {pnl_pct:.2f}%)")
                 
                 # Calculate current portfolio value
-                portfolio_value = current_capital
+                portfolio_value = float(current_capital)
                 for symbol, position in positions.items():
                     portfolio_value += position['shares'] * current_price
                 
                 portfolio_values.append({
-                    'date': current_date,
-                    'value': portfolio_value,
-                    'capital': current_capital,
-                    'positions': len(positions)
+                    'date': str(current_date),
+                    'value': float(portfolio_value),
+                    'capital': float(current_capital),
+                    'positions': int(len(positions))
                 })
             
             # Calculate performance metrics
@@ -349,7 +349,7 @@ class BacktestEngine:
                 # Check each stock for signals
                 for symbol, data in stock_data.items():
                     if current_date in data.index:
-                        current_price = data.loc[current_date]['close']
+                        current_price = float(data.loc[current_date]['close'])
                         
                         # Check for trading signals
                         signal_generated, signal_details = self._get_trading_system().run_strategy_signal(
@@ -410,7 +410,7 @@ class BacktestEngine:
                 # Calculate current portfolio value
                 for symbol, position in positions.items():
                     if symbol in stock_data and current_date in stock_data[symbol].index:
-                        current_price = stock_data[symbol].loc[current_date]['close']
+                        current_price = float(stock_data[symbol].loc[current_date]['close'])
                         daily_portfolio_value += position['shares'] * current_price
                 
                 portfolio_values.append({
@@ -486,8 +486,8 @@ class BacktestEngine:
             # Benchmark comparison
             benchmark_return = 0.0
             if benchmark_data is not None and len(benchmark_data) > 0:
-                benchmark_start = benchmark_data.iloc[0]['close']
-                benchmark_end = benchmark_data.iloc[-1]['close']
+                benchmark_start = float(benchmark_data.iloc[0]['close'])
+                benchmark_end = float(benchmark_data.iloc[-1]['close'])
                 benchmark_return = float(((benchmark_end - benchmark_start) / benchmark_start) * 100)
             
             alpha = float(total_return - benchmark_return)
