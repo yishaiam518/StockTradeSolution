@@ -213,4 +213,4 @@ config/secrets.yaml
 # Trading specific
 portfolio_export.json
 trading_system.db
-temp_header.html 
+temp_header.html src/web_dashboard/static/js/plotly-latest.min.js
