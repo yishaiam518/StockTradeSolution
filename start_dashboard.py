@@ -14,12 +14,12 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
 def open_browser():
     """Open the dashboard in the browser"""
-    webbrowser.open('http://localhost:5000')
+    webbrowser.open('http://localhost:8080')
 
 def main():
     """Start the dashboard"""
     try:
-        from src.web_dashboard.dashboard_app import app
+        from src.web_dashboard.dashboard_app import DashboardApp
         
         print("🚀 Starting StockTradeSolution Dashboard...")
         print("=" * 50)
@@ -36,12 +36,13 @@ def main():
         Timer(2.0, open_browser).start()
         
         print("🌐 Opening dashboard in browser...")
-        print("🔗 URL: http://localhost:5000")
+        print("🔗 URL: http://localhost:8080")
         print("⏹️  Press Ctrl+C to stop the dashboard")
         print("=" * 50)
         
-        # Start the Flask app
-        app.run(host='0.0.0.0', port=5000, debug=True)
+        # Create and start the dashboard app
+        dashboard_app = DashboardApp()
+        dashboard_app.start()
         
     except ImportError as e:
         print(f"❌ Error importing dashboard: {e}")

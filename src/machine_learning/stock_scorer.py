@@ -20,7 +20,6 @@ from src.utils.logger import get_logger
 from src.data_engine import DataEngine
 from src.indicators import TechnicalIndicators
 from src.strategies import MACDStrategy
-from src.trading_system import get_trading_system
 
 
 class DataSource(Enum):
@@ -79,9 +78,6 @@ class UnifiedStockScorer:
         # Core components
         self.data_engine = DataEngine()
         self.indicators = TechnicalIndicators()
-        
-        # Get centralized trading system for strategy access
-        self.trading_system = get_trading_system()
         
         # Scoring configuration
         self.scoring_config = self.config.get('stock_scoring', {})

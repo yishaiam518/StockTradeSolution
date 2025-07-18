@@ -12,7 +12,6 @@ from typing import Dict, Any, List, Optional, Tuple
 import json
 
 from ..utils.logger import get_logger
-from ..trading_system import get_trading_system
 from ..machine_learning.stock_scorer import ScoringMode
 
 logger = get_logger(__name__)
@@ -31,7 +30,6 @@ class BacktestEngine:
     
     def __init__(self):
         """Initialize the backtesting engine."""
-        self.trading_system = get_trading_system()
         self.logger = get_logger(__name__)
         
         # Backtest state
@@ -39,6 +37,13 @@ class BacktestEngine:
         self.backtest_results = {}
         
         self.logger.info("Backtest Engine initialized")
+    
+    def _get_trading_system(self):
+        """Lazy load the trading system to avoid circular imports."""
+        if not hasattr(self, '_trading_system'):
+            from ..trading_system import get_trading_system
+            self._trading_system = get_trading_system()
+        return self._trading_system
     
     def run_backtest(self, symbol: str, strategy: str, profile: str, start_date: str, 
                     end_date: str, custom_parameters: Dict[str, Any] = None,
@@ -62,16 +67,16 @@ class BacktestEngine:
             self.logger.info(f"Starting backtest for {symbol} with {strategy}_{profile}")
             
             # Reset strategy state
-            self.trading_system.reset_strategy(strategy)
+            self._get_trading_system().reset_strategy(strategy)
             
             # Update strategy config if custom parameters provided
             if custom_parameters:
-                current_config = self.trading_system.get_strategy_config(strategy)
+                current_config = self._get_trading_system().get_strategy_config(strategy)
                 updated_config = self._merge_parameters(current_config, custom_parameters)
-                self.trading_system.update_strategy_config(strategy, updated_config)
+                self._get_trading_system().update_strategy_config(strategy, updated_config)
             
             # Create scoring list for backtesting mode
-            scoring_list = self.trading_system.create_scoring_list(
+            scoring_list = self._get_trading_system().create_scoring_list(
                 mode=ScoringMode.BACKTESTING,
                 strategy=strategy,
                 profile=profile,
@@ -84,14 +89,14 @@ class BacktestEngine:
                 return {'error': f'No scoring data available for {symbol}'}
             
             # Prepare data using centralized system
-            data = self.trading_system.prepare_data(symbol, start_date, end_date)
+            data = self._get_trading_system().prepare_data(symbol, start_date, end_date)
             if data.empty:
                 return {'error': f'No data available for {symbol}'}
             
             # Get benchmark data
             benchmark_data = None
             if benchmark and benchmark != symbol:
-                benchmark_data = self.trading_system.prepare_data(benchmark, start_date, end_date)
+                benchmark_data = self._get_trading_system().prepare_data(benchmark, start_date, end_date)
             
             # Run backtest simulation
             results = self._run_simulation(data, strategy, profile, benchmark_data)
@@ -133,10 +138,10 @@ class BacktestEngine:
             self.logger.info(f"Starting historical backtest with {strategy}_{profile}")
             
             # Reset strategy state
-            self.trading_system.reset_strategy(strategy)
+            self._get_trading_system().reset_strategy(strategy)
             
             # Create scoring list for historical mode
-            scoring_list = self.trading_system.create_scoring_list(
+            scoring_list = self._get_trading_system().create_scoring_list(
                 mode=ScoringMode.HISTORICAL,
                 strategy=strategy,
                 profile=profile,
@@ -153,7 +158,7 @@ class BacktestEngine:
             # Prepare data for all selected stocks
             stock_data = {}
             for symbol in selected_symbols:
-                data = self.trading_system.prepare_data(symbol, start_date, end_date)
+                data = self._get_trading_system().prepare_data(symbol, start_date, end_date)
                 if not data.empty:
                     stock_data[symbol] = data
             
@@ -163,7 +168,7 @@ class BacktestEngine:
             # Get benchmark data
             benchmark_data = None
             if benchmark:
-                benchmark_data = self.trading_system.prepare_data(benchmark, start_date, end_date)
+                benchmark_data = self._get_trading_system().prepare_data(benchmark, start_date, end_date)
             
             # Run simulation
             results = self._run_multi_stock_simulation(stock_data, strategy, profile, benchmark_data)
@@ -209,7 +214,7 @@ class BacktestEngine:
             portfolio_values = []
             
             # Set strategy profile
-            self.trading_system.set_strategy_profile(strategy, profile)
+            self._get_trading_system().set_strategy_profile(strategy, profile)
             
             # Run simulation day by day
             for i in range(len(data)):
@@ -217,7 +222,7 @@ class BacktestEngine:
                 current_price = data.iloc[i]['close']
                 
                 # Check for trading signals
-                signal_generated, signal_details = self.trading_system.run_strategy_signal(
+                signal_generated, signal_details = self._get_trading_system().run_strategy_signal(
                     strategy, data, i
                 )
                 
@@ -329,7 +334,7 @@ class BacktestEngine:
             portfolio_values = []
             
             # Set strategy profile
-            self.trading_system.set_strategy_profile(strategy, profile)
+            self._get_trading_system().set_strategy_profile(strategy, profile)
             
             # Get all unique dates
             all_dates = set()
@@ -347,7 +352,7 @@ class BacktestEngine:
                         current_price = data.loc[current_date]['close']
                         
                         # Check for trading signals
-                        signal_generated, signal_details = self.trading_system.run_strategy_signal(
+                        signal_generated, signal_details = self._get_trading_system().run_strategy_signal(
                             strategy, data, data.index.get_loc(current_date)
                         )
                         

@@ -7,7 +7,7 @@ This module includes:
 - Price prediction
 - Risk modeling
 - Sentiment analysis
-- Independent stock scoring
+- Unified stock scoring
 """
 
 from .model_trainer import ModelTrainer
@@ -15,7 +15,7 @@ from .pattern_recognition import PatternRecognition
 from .price_prediction import PricePrediction
 from .risk_model import RiskModel
 from .sentiment_analysis import SentimentAnalysis
-from .stock_scorer import IndependentStockScorer, StockScore, DataSource, ScoringMethod
+from .stock_scorer import UnifiedStockScorer, StockScore, DataSource, ScoringMethod, ScoringMode
 
 __all__ = [
     'ModelTrainer',
@@ -23,8 +23,9 @@ __all__ = [
     'PricePrediction',
     'RiskModel',
     'SentimentAnalysis',
-    'IndependentStockScorer',
+    'UnifiedStockScorer',
     'StockScore',
     'DataSource',
-    'ScoringMethod'
+    'ScoringMethod',
+    'ScoringMode'
 ] 

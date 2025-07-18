@@ -36,10 +36,6 @@ class DashboardApp:
         self.config = config
         self.logger = logger
         
-        # Get centralized trading system
-        from ..trading_system import get_trading_system
-        self.trading_system = get_trading_system()
-        
         # Initialize components
         self.data_engine = DataEngine()
         self.trading_engine = TradingEngine()
@@ -66,6 +62,13 @@ class DashboardApp:
         self._setup_routes()
         
         self.logger.info("Dashboard application initialized")
+    
+    def _get_trading_system(self):
+        """Lazy load the trading system to avoid circular imports."""
+        if not hasattr(self, '_trading_system'):
+            from ..trading_system import get_trading_system
+            self._trading_system = get_trading_system()
+        return self._trading_system
     
     def _setup_routes(self):
         """Setup Flask routes."""

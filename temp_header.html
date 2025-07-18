@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>AI Trading Dashboard</title>
+    <script src="/static/js/socket.io.min.js"></script>
+    <script src="/static/js/plotly-latest.min.js"></script>
+    <script src="/static/js/chart.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            text-align: center;
+            font-size: 1.1em;
+        }
+
+        /* Tab Navigation */
+        .tab-navigation {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .tab-buttons {
+            display: flex;
+            border-bottom: 1px solid #ecf0f1;
+            background: #f8f9fa;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 15px 20px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1.1em;
+            font-weight: 500;
+            color: #7f8c8d;
+            transition: all 0.3s ease;
+            border-bottom: 3px solid transparent;
+            text-align: center;
+        }
+
+        .tab-button.active {
+            color: #3498db;
+            border-bottom-color: #3498db;
+            background: white;
+        }
+
+        .tab-button:hover {
+            background: rgba(52, 152, 219, 0.05);
+            color: #3498db;
+        }
+
+        .tab-content {
+            display: none;
+            padding: 20px;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .portfolio-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+        }
+
+        .metric h3 {
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            opacity: 0.9;
+        }
+
+        .metric .value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .positive { color: #27ae60; }
+        .negative { color: #e74c3c; }
+
+        .chart-container {
+            height: 400px;
+            margin-top: 15px;
+        }
+
+        .trading-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online { background: #27ae60; }
+        .status-offline { background: #e74c3c; }
+
+        .positions-table, .tickers-table, .trades-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .positions-table th,
+        .positions-table td,
+        .tickers-table th,
+        .tickers-table td,
+        .trades-table th,
+        .trades-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ecf0f1;
+        }
+
+        .positions-table th,
+        .tickers-table th,
+        .trades-table th {
+            background: #f8f9fa;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .tickers-table tr:hover,
+        .trades-table tr:hover {
+            background: rgba(52, 152, 219, 0.05);
+            cursor: pointer;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #7f8c8d;
+        }
+
+        .error {
+            background: #e74c3c;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+
+        .backtest-results {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .backtest-results h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+
+        .backtest-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+
+        .backtest-metric {
+            text-align: center;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .backtest-metric h4 {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .backtest-metric .value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .indicator-status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .indicator-bullish { background: #27ae60; color: white; }
+        .indicator-bearish { background: #e74c3c; color: white; }
+        .indicator-neutral { background: #f39c12; color: white; }
+
+        .score-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .score-high { background: #27ae60; color: white; }
+        .score-medium { background: #f39c12; color: white; }
+        .score-low { background: #e74c3c; color: white; }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 15px;
+            width: 80%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: #000;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .tab-buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 AI Trading Dashboard</h1>
+            <p>Real-time monitoring and control for your automated trading system</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation" style="margin-bottom: 20px; background: white; border-radius: 15px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);">
+            <div class="tab-buttons" style="display: flex; border-bottom: 1px solid #ecf0f1; background: #f8f9fa;">
+                <button class="tab-button active" data-tab="overview" style="flex: 1; padding: 15px 20px; background: none; border: none; cursor: pointer; font-size: 1.1em; font-weight: 500; color: #7f8c8d; transition: all 0.3s ease; border-bottom: 3px solid transparent; text-align: center;">📊 Overview</button>
+                <button class="tab-button" data-tab="tickers" style="flex: 1; padding: 15px 20px; background: none; border: none; cursor: pointer; font-size: 1.1em; font-weight: 500; color: #7f8c8d; transition: all 0.3s ease; border-bottom: 3px solid transparent; text-align: center;">📈 Tickers & Scoring</button>
+                <button class="tab-button" data-tab="trades" style="flex: 1; padding: 15px 20px; background: none; border: none; cursor: pointer; font-size: 1.1em; font-weight: 500; color: #7f8c8d; transition: all 0.3s ease; border-bottom: 3px solid transparent; text-align: center;">📋 Trade History</button>
+                <button class="tab-button" data-tab="backtesting" style="flex: 1; padding: 15px 20px; background: none; border: none; cursor: pointer; font-size: 1.1em; font-weight: 500; color: #7f8c8d; transition: all 0.3s ease; border-bottom: 3px solid transparent; text-align: center;">🧪 Backtesting</button>
+            </div>
+
+            <!-- Overview Tab -->
+            <div id="overview" class="tab-content active" style="display: block; padding: 20px;">
+                <div class="dashboard-grid">
+                    <!-- Portfolio Overview -->
+                    <div class="card">
+                        <h2>📊 Portfolio Overview</h2>
+                        <div id="portfolio-summary" class="portfolio-summary">
+                            <div class="metric">
