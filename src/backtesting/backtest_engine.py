@@ -216,47 +216,27 @@ class BacktestEngine:
             # Set strategy profile
             self._get_trading_system().set_strategy_profile(strategy, profile)
             
+            # Get strategy instance for direct access
+            strategy_instance = self._get_trading_system().get_strategy(strategy)
+            
             # Run simulation day by day
             for i in range(len(data)):
                 current_date = data.index[i]
                 current_price = float(data.iloc[i]['close'])
+                symbol = data.name if hasattr(data, 'name') else 'UNKNOWN'
                 
-                # Check for trading signals
-                signal_generated, signal_details = self._get_trading_system().run_strategy_signal(
-                    strategy, data, i
-                )
-                
-                if signal_generated:
-                    action = signal_details.get('action')
-                    symbol = data.name if hasattr(data, 'name') else 'UNKNOWN'
+                # Check for exit signals first (if we have a position)
+                if symbol in positions:
+                    position = positions[symbol]
+                    entry_price = position['entry_price']
+                    entry_date = position['entry_date']
                     
-                    if action == 'BUY' and symbol not in positions:
-                        # Execute buy
-                        shares = current_capital / current_price
-                        positions[symbol] = {
-                            'shares': float(shares),
-                            'entry_price': float(current_price),
-                            'entry_date': str(current_date)
-                        }
-                        current_capital = 0
-                        
-                        trades.append({
-                            'date': str(current_date),
-                            'symbol': symbol,
-                            'action': 'BUY',
-                            'shares': float(shares),
-                            'price': float(current_price),
-                            'value': float(shares * current_price),
-                            'strategy': f"{strategy}_{profile}"
-                        })
-                        
-                        self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
+                    # Check for exit signal
+                    should_exit, exit_reason = strategy_instance.should_exit(data, i, entry_price, entry_date)
                     
-                    elif action == 'SELL' and symbol in positions:
+                    if should_exit:
                         # Execute sell
-                        position = positions[symbol]
                         shares = position['shares']
-                        entry_price = position['entry_price']
                         
                         # Calculate P&L
                         pnl = float((current_price - entry_price) * shares)
@@ -273,12 +253,41 @@ class BacktestEngine:
                             'value': float(shares * current_price),
                             'pnl': pnl,
                             'pnl_pct': pnl_pct,
-                            'strategy': f"{strategy}_{profile}"
+                            'strategy': f"{strategy}_{profile}",
+                            'reason': exit_reason.get('summary', 'Exit signal')
                         })
                         
                         del positions[symbol]
                         
                         self.logger.info(f"SELL {shares:.2f} shares of {symbol} at ${current_price:.2f} (P&L: ${pnl:.2f}, {pnl_pct:.2f}%)")
+                
+                # Check for entry signals (if we don't have a position)
+                if symbol not in positions:
+                    # Check for entry signal
+                    should_entry, entry_reason = strategy_instance.should_entry(data, i)
+                    
+                    if should_entry:
+                        # Execute buy
+                        shares = current_capital / current_price
+                        positions[symbol] = {
+                            'shares': float(shares),
+                            'entry_price': float(current_price),
+                            'entry_date': str(current_date)
+                        }
+                        current_capital = 0
+                        
+                        trades.append({
+                            'date': str(current_date),
+                            'symbol': symbol,
+                            'action': 'BUY',
+                            'shares': float(shares),
+                            'price': float(current_price),
+                            'value': float(shares * current_price),
+                            'strategy': f"{strategy}_{profile}",
+                            'reason': entry_reason.get('summary', 'Entry signal')
+                        })
+                        
+                        self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
                 
                 # Calculate current portfolio value
                 portfolio_value = float(current_capital)
@@ -336,6 +345,9 @@ class BacktestEngine:
             # Set strategy profile
             self._get_trading_system().set_strategy_profile(strategy, profile)
             
+            # Get strategy instance for direct access
+            strategy_instance = self._get_trading_system().get_strategy(strategy)
+            
             # Get all unique dates
             all_dates = set()
             for data in stock_data.values():
@@ -350,16 +362,50 @@ class BacktestEngine:
                 for symbol, data in stock_data.items():
                     if current_date in data.index:
                         current_price = float(data.loc[current_date]['close'])
+                        current_index = data.index.get_loc(current_date)
                         
-                        # Check for trading signals
-                        signal_generated, signal_details = self._get_trading_system().run_strategy_signal(
-                            strategy, data, data.index.get_loc(current_date)
-                        )
-                        
-                        if signal_generated:
-                            action = signal_details.get('action')
+                        # Check for exit signals first (if we have a position)
+                        if symbol in positions:
+                            position = positions[symbol]
+                            entry_price = position['entry_price']
+                            entry_date = position['entry_date']
                             
-                            if action == 'BUY' and symbol not in positions:
+                            # Check for exit signal
+                            should_exit, exit_reason = strategy_instance.should_exit(data, current_index, entry_price, entry_date)
+                            
+                            if should_exit:
+                                # Execute sell
+                                shares = position['shares']
+                                
+                                # Calculate P&L
+                                pnl = float((current_price - entry_price) * shares)
+                                pnl_pct = float(((current_price - entry_price) / entry_price) * 100)
+                                
+                                current_capital += shares * current_price
+                                
+                                trades.append({
+                                    'date': str(current_date),
+                                    'symbol': symbol,
+                                    'action': 'SELL',
+                                    'shares': shares,
+                                    'price': float(current_price),
+                                    'value': float(shares * current_price),
+                                    'pnl': pnl,
+                                    'pnl_pct': pnl_pct,
+                                    'strategy': f"{strategy}_{profile}",
+                                    'reason': exit_reason.get('summary', 'Exit signal')
+                                })
+                                
+                                del positions[symbol]
+                                
+                                self.logger.info(f"SELL {shares:.2f} shares of {symbol} at ${current_price:.2f} (P&L: ${pnl:.2f}, {pnl_pct:.2f}%)")
+                        
+                        # Check for entry signals (if we don't have a position)
+                        if symbol not in positions:
+                            # Check for entry signal
+                            should_entry, entry_reason = strategy_instance.should_entry(data, current_index)
+                            
+                            if should_entry:
                                 # Execute buy (allocate 10% of capital per position)
                                 position_size = initial_capital * 0.1
                                 if current_capital >= position_size:
@@ -378,41 +424,17 @@ class BacktestEngine:
                                         'shares': shares,
                                         'price': float(current_price),
                                         'value': float(shares * current_price),
-                                        'strategy': f"{strategy}_{profile}"
+                                        'strategy': f"{strategy}_{profile}",
+                                        'reason': entry_reason.get('summary', 'Entry signal')
                                     })
-                            
-                            elif action == 'SELL' and symbol in positions:
-                                # Execute sell
-                                position = positions[symbol]
-                                shares = position['shares']
-                                entry_price = position['entry_price']
-                                
-                                # Calculate P&L
-                                pnl = float((current_price - entry_price) * shares)
-                                pnl_pct = float(((current_price - entry_price) / entry_price) * 100)
-                                
-                                current_capital += shares * current_price
-                                
-                                trades.append({
-                                    'date': str(current_date),
-                                    'symbol': symbol,
-                                    'action': 'SELL',
-                                    'shares': float(shares),
-                                    'price': float(current_price),
-                                    'value': float(shares * current_price),
-                                    'pnl': pnl,
-                                    'pnl_pct': pnl_pct,
-                                    'strategy': f"{strategy}_{profile}"
-                                })
-                                
-                                del positions[symbol]
+                                    
+                                    self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
+                        
+                        # Update daily portfolio value for this stock
+                        if symbol in positions:
+                            daily_portfolio_value += positions[symbol]['shares'] * current_price
                 
-                # Calculate current portfolio value
-                for symbol, position in positions.items():
-                    if symbol in stock_data and current_date in stock_data[symbol].index:
-                        current_price = float(stock_data[symbol].loc[current_date]['close'])
-                        daily_portfolio_value += position['shares'] * current_price
-                
+                # Record portfolio value for this day
                 portfolio_values.append({
                     'date': str(current_date),
                     'value': float(daily_portfolio_value),
