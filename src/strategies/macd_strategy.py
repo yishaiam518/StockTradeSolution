@@ -23,23 +23,33 @@ class MACDStrategy(BaseStrategy):
         # Set the profile
         self.profile = profile
         
-        # Initialize position tracking
-        self.current_position = None
-        
         # Apply configuration if provided
         if config_dict:
             # Handle profile-based configuration
             if 'profiles' in config_dict and profile in config_dict['profiles']:
                 profile_config = config_dict['profiles'][profile]
-                self._apply_profile_config(profile_config)
-            else:
-                # Legacy configuration handling
-                self._apply_legacy_config(config_dict)
-        else:
-            # Use default profile configuration
-            self._apply_default_profile_config()
+                self.entry_conditions.update(profile_config.get('entry_conditions', {}))
+                self.exit_conditions.update(profile_config.get('exit_conditions', {}))
+                self.position_sizing.update(profile_config.get('position_sizing', {}))
+            
+            # Handle direct configuration
+            if 'entry_conditions' in config_dict:
+                self.entry_conditions.update(config_dict['entry_conditions'])
+            if 'exit_conditions' in config_dict:
+                self.exit_conditions.update(config_dict['exit_conditions'])
+            if 'position_sizing' in config_dict:
+                self.position_sizing.update(config_dict['position_sizing'])
+            if 'name' in config_dict:
+                self.name = config_dict['name']
         
-        logger.info(f"Initialized MACD Strategy with profile: {self.profile}")
+        # Configure profile
+        self.configure_profile(profile)
+        
+        # Strategy-specific parameters
+        self.take_profit_pct = self.exit_conditions.get('take_profit_pct', 5.0)
+        self.stop_loss_pct = self.exit_conditions.get('stop_loss_pct', 3.0)
+        
+        logger.info(f"Initialized MACD Strategy with {profile} profile")
     
     def _apply_profile_config(self, profile_config: Dict[str, Any]):
         """Apply configuration from a specific profile."""
@@ -150,50 +160,21 @@ class MACDStrategy(BaseStrategy):
     
     def should_entry(self, data: pd.DataFrame, current_index: int) -> Tuple[bool, Dict[str, Any]]:
         """
-        Check if we should enter a position based on MACD strategy with scoring system.
+        Entry signal: MACD line crosses above signal line
         """
-        if self.current_position is not None:
-            return False, {'summary': 'Already in position'}
         if current_index < 1:
             return False, {'summary': 'Insufficient data'}
         try:
             current_row = data.iloc[current_index]
-            weights = self.entry_conditions.get('weights', {})
-            threshold = self.entry_conditions.get('threshold', 1.0)
-            # Individual conditions
-            macd_crossover_up = current_row.get('macd_crossover_up', False)
-            rsi_value = current_row.get('rsi', 50)
-            rsi_neutral = self.rsi_range[0] <= rsi_value <= self.rsi_range[1]
-            price_above_ema_short = current_row.get('price_above_ema_short', False)
-            price_above_ema_long = current_row.get('price_above_ema_long', False)
-            # Scoring
-            score = 0.0
-            if macd_crossover_up:
-                score += weights.get('macd_crossover_up', 0)
-            if rsi_neutral:
-                score += weights.get('rsi_neutral', 0)
-            if price_above_ema_short:
-                score += weights.get('price_above_ema_short', 0)
-            if price_above_ema_long:
-                score += weights.get('price_above_ema_long', 0)
+            macd_crossover_up = bool(current_row.get('macd_crossover_up', False))
             reason = {
-                'summary': f'MACD Strategy Entry (Scoring) - Profile: {self.profile}',
-                'profile': self.profile,
+                'summary': 'MACD Strategy Entry',
                 'macd_crossover_up': macd_crossover_up,
-                'rsi_neutral': rsi_neutral,
-                'rsi_value': rsi_value,
-                'price_above_ema_short': price_above_ema_short,
-                'price_above_ema_long': price_above_ema_long,
-                'score': score,
-                'threshold': threshold,
-                'close_price': current_row.get('close', 0),
-                'ema_short': current_row.get('ema_short', 0),
-                'ema_long': current_row.get('ema_long', 0)
+                'close_price': current_row.get('close', 0)
             }
-            should_entry = score >= threshold
-            return should_entry, reason
+            return macd_crossover_up, reason
         except Exception as e:
-            logger.error(f"Error in MACD entry logic: {str(e)}")
+            logger.error(f"Error in MACDStrategy.should_entry: {str(e)}")
             return False, {'summary': f'Error: {str(e)}'}
     
     def should_exit(self, data: pd.DataFrame, current_index: int, entry_price: float, entry_date) -> Tuple[bool, Dict[str, Any]]:
