@@ -1,0 +1,33 @@
+STOCKTRADESOLUTION - DETAILED TRADE REPORT
+============================================================
+Generated: 2025-07-18 19:05:40
+
+DETAILED TRADE LIST
+============================================================
+trade_id symbol         strategy      profile                 entry_date                  exit_date  entry_price  exit_price  quantity      pnl  pnl_pct  hold_days status exit_reason   month
+    T001  GOOGL    MACDCanonical     moderate 2024-10-13 19:05:40.620495 2024-10-24 19:05:40.620495       306.13      371.72        35  2295.85    21.43         11 closed   stop_loss 2024-10
+    T002    AMD MACDConservative     moderate 2024-10-22 19:05:40.620571 2024-11-02 19:05:40.620571       435.02      425.82        95  -874.24    -2.12         11 closed take_profit 2024-10
+    T003    AMD   MACDAggressive   aggressive 2024-08-20 19:05:40.620606 2024-09-12 19:05:40.620606       450.30      418.25        76 -2435.66    -7.12         23 closed   stop_loss 2024-08
+    T004   AMZN MACDConservative conservative 2025-05-03 19:05:40.620637 2025-05-05 19:05:40.620637       222.15      236.39        93  1323.95     6.41          2 closed   stop_loss 2025-05
+    T005   NFLX    MACDCanonical     moderate 2024-10-10 19:05:40.620665 2024-11-01 19:05:40.620665       245.17      237.31        22  -172.82    -3.20         22 closed   stop_loss 2024-10
+    T006   MSFT MACDConservative     moderate 2024-12-05 19:05:40.620691 2025-01-03 19:05:40.620691       159.60      146.49        85 -1114.89    -8.22         29 closed     timeout 2024-12
+    T007   NFLX MACDConservative   aggressive 2025-05-04 19:05:40.620716 2025-05-23 19:05:40.620716       446.75      548.33        54  5485.35    22.74         19 closed     timeout 2025-05
+    T008   META    MACDCanonical     moderate 2024-10-12 19:05:40.620741 2024-10-24 19:05:40.620741       443.65      542.15        92  9061.31    22.20         12 closed take_profit 2024-10
+    T009   MSFT MACDConservative conservative 2025-06-30 19:05:40.620768 2025-07-29 19:05:40.620768       493.11      549.67        58  3280.69    11.47         29 closed     timeout 2025-06
+    T010   AAPL MACDConservative conservative 2025-02-23 19:05:40.620798 2025-02-27 19:05:40.620798       380.07      452.02        60  4317.04    18.93          4 closed   stop_loss 2025-02
+    T011   NFLX   MACDAggressive conservative 2025-06-14 19:05:40.620825 2025-07-07 19:05:40.620825       462.18      467.42        93   487.07     1.13         23 closed   stop_loss 2025-06
+    T012   META MACDConservative conservative 2025-01-10 19:05:40.620851 2025-02-07 19:05:40.620851       279.71      240.42        40 -1571.67   -14.05         28 closed take_profit 2025-01
+    T013   NVDA   MACDAggressive     moderate 2024-09-30 19:05:40.620878 2024-10-07 19:05:40.620878       394.63      352.96        70 -2917.32   -10.56          7 closed   stop_loss 2024-09
+    T014    AMD    MACDCanonical     moderate 2025-05-28 19:05:40.620905 2025-06-25 19:05:40.620905       469.82      480.02        71   724.81     2.17         28 closed      signal 2025-05
+    T015   META    MACDCanonical conservative 2024-11-29 19:05:40.620930 2024-12-11 19:05:40.620930       437.91      517.71        73  5825.45    18.22         12 closed take_profit 2024-11
+    T016   NFLX   MACDAggressive   aggressive 2025-04-10 19:05:40.620954 2025-04-25 19:05:40.620954        60.86       59.99        55   -47.82    -1.43         15 closed      signal 2025-04
+    T017    AMD MACDConservative     moderate 2025-01-20 19:05:40.620978 2025-02-02 19:05:40.620978       369.72      395.14        39   991.41     6.88         13 closed take_profit 2025-01
+    T018   INTC MACDConservative conservative 2025-03-28 19:05:40.621003 2025-04-02 19:05:40.621003       105.58       94.27        81  -916.39   -10.72          5 closed take_profit 2025-03
+    T019   TSLA MACDConservative conservative 2025-03-10 19:05:40.621027 2025-03-12 19:05:40.621027       304.43      349.07        79  3526.43    14.66          2 closed     timeout 2025-03
+    T020   INTC   MACDAggressive conservative 2025-04-19 19:05:40.621052 2025-05-10 19:05:40.621052       245.40      256.88        24   275.53     4.68         21 closed     timeout 2025-04
+
+SUMMARY STATISTICS
+============================================================
+Total Trades: 20
+Total P&L: $27,544.08
+Win Rate: 60.0%
