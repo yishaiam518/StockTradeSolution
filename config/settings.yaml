@@ -1,0 +1,229 @@
+# Trading System Configuration
+
+# Data Engine Settings
+data_engine:
+  cache_duration: 3600  # Cache data for 1 hour
+  max_retries: 3
+  timeout: 30
+
+# Strategy Settings with Profile System
+strategies:
+  MACD:
+    description: "MACD-based trading strategy with multiple risk profiles"
+    profiles:
+      balanced:
+        name: "Balanced"
+        description: "Standard MACD Strategy with balanced parameters"
+        entry_weights:
+          macd_crossover_up: 0.5
+          rsi_neutral: 0.3
+          price_above_ema_short: 0.1
+          price_above_ema_long: 0.1
+        entry_threshold: 0.3
+        rsi_range: [40, 60]
+        max_drawdown_pct: 5.0
+        take_profit_pct: 5.0
+        stop_loss_pct: 3.0
+        max_hold_days: 30
+        
+      canonical:
+        name: "Canonical"
+        description: "Canonical MACD Strategy with traditional parameters"
+        entry_weights:
+          macd_crossover_up: 0.6
+          rsi_neutral: 0.2
+          price_above_ema_short: 0.1
+          price_above_ema_long: 0.1
+        entry_threshold: 0.4
+        rsi_range: [35, 65]
+        max_drawdown_pct: 5.0
+        take_profit_pct: 5.0
+        stop_loss_pct: 3.0
+        max_hold_days: 30
+        
+      aggressive:
+        name: "Aggressive"
+        description: "Aggressive MACD Strategy for high-frequency trading"
+        entry_weights:
+          macd_crossover_up: 0.7
+          rsi_neutral: 0.2
+          price_above_ema_short: 0.05
+          price_above_ema_long: 0.05
+        entry_threshold: 0.2
+        rsi_range: [30, 70]
+        max_drawdown_pct: 3.0
+        take_profit_pct: 3.0
+        stop_loss_pct: 2.0
+        max_hold_days: 7
+        
+      conservative:
+        name: "Conservative"
+        description: "Conservative MACD Strategy for long-term positions"
+        entry_weights:
+          macd_crossover_up: 0.4
+          rsi_neutral: 0.4
+          price_above_ema_short: 0.1
+          price_above_ema_long: 0.1
+        entry_threshold: 0.6
+        rsi_range: [45, 55]
+        max_drawdown_pct: 7.0
+        take_profit_pct: 10.0
+        stop_loss_pct: 5.0
+        max_hold_days: 60
+
+# Available Strategies for Dashboard (Legacy - will be replaced by profile system)
+available:
+  - name: "MACD"
+    description: "MACD Strategy with multiple risk profiles"
+    category: "MACD"
+    profiles:
+      - "balanced"
+      - "canonical"
+      - "aggressive"
+      - "conservative"
+
+# Data Collection Settings
+data_collection:
+  # Initial bulk collection settings
+  initial_years: 5  # Years of historical data to collect initially
+  update_frequency: "daily"  # daily, hourly, realtime
+  realtime_interval: 300  # 5 minutes for real-time updates
+  
+  # Data sources
+  sources:
+    - name: "NASDAQ"
+      priority: 1
+      symbols: ["AAPL", "MSFT", "GOOGL", "AMZN", "TSLA", "NVDA", "META", "NFLX", "AMD", "INTC"]
+    - name: "DOW"
+      priority: 2
+      symbols: ["JPM", "JNJ", "PG", "UNH", "HD", "BAC", "PFE", "KO", "V", "MRK"]
+    - name: "SP500"
+      priority: 3
+      symbols: ["SPY", "QQQ", "IWM", "VTI", "VOO"]
+  
+  # Caching settings
+  cache_settings:
+    historical_data: 86400  # 24 hours
+    realtime_data: 300     # 5 minutes
+    position_data: 60      # 1 minute for active positions
+
+# Stock Selection and Scoring
+stock_selection:
+  # Scoring weights for different factors
+  scoring_weights:
+    volatility: 0.4
+    volume: 0.2
+    trend: 0.2
+    macd: 0.1
+    rsi: 0.1
+  
+  # Minimum thresholds
+  min_volatility: 0.005
+  min_volume: 500000
+  min_score: 0.4
+  
+  # Universe settings
+  universe_type: "watchlist"
+  max_universe_size: 1000
+
+# Backtesting Settings
+backtesting:
+  initial_capital: 10000
+  commission: 0.001
+  slippage: 0.001
+
+# Real-time Trading Settings
+real_time_trading:
+  broker: "paper_trading"
+  execution_settings:
+    trading_hours:
+      timezone: "America/New_York"
+      start: "09:30"
+      end: "16:00"
+    max_daily_trades: 50
+  paper_trading:
+    initial_balance: 100000
+    commission: 0.001
+    slippage: 0.001
+
+# Trading Hours Settings
+trading_hours:
+  timezone: "America/New_York"
+  market_open: "09:30"
+  market_close: "16:00"
+  pre_market_open: "04:00"
+  after_hours_close: "20:00"
+
+# Automation Settings
+automation:
+  mode: "paper_trading"
+  watchlist:
+    - AAPL
+    - MSFT
+    - GOOGL
+    - AMZN
+    - TSLA
+    - NVDA
+    - META
+    - NFLX
+    - AMD
+    - INTC
+    - CRM
+    - ORCL
+    - ADBE
+    - PYPL
+    - SQ
+    - ZM
+    - ROKU
+    - SNAP
+    - TWTR
+    - UBER
+    - LYFT
+    - SPOT
+    - SHOP
+    - ZM
+    - SPY
+    - QQQ
+    - IWM
+    - VTI
+    - VOO
+  
+  # Trading parameters
+  max_positions: 10
+  max_position_size: 0.1
+  min_confidence: 0.4
+  
+  # Risk management
+  max_daily_loss: 0.05
+  max_portfolio_risk: 0.02
+  
+  # Cycle settings
+  cycle_interval: 300
+  market_hours_only: true
+  
+  # Paper trading settings
+  paper_trading:
+    initial_capital: 100000
+    enable_commission: true
+
+# Web Dashboard Settings
+web_dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+  auto_reload: true
+  refresh_interval: 300
+
+# Dashboard Settings
+dashboard:
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+  auto_reload: true
+
+# Logging Settings
+logging:
+  level: "INFO"
+  file: "logs/trading_system.log"
+  max_size: 10485760  # 10MB
+  backup_count: 5 
