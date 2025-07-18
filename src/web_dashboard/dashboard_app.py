@@ -28,6 +28,22 @@ from ..portfolio_management.portfolio_manager import PortfolioManager
 from .chart_generator import ChartGenerator
 
 
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle numpy types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, pd.Timestamp):
+            return obj.isoformat()
+        elif isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
 class DashboardApp:
     """Main dashboard application."""
     
@@ -46,6 +62,7 @@ class DashboardApp:
         # Flask app
         self.app = Flask(__name__, static_folder='static')
         self.app.config['SECRET_KEY'] = 'your-secret-key-here'
+        self.app.json_encoder = NumpyEncoder
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         
         # Dashboard state
@@ -222,8 +239,6 @@ class DashboardApp:
         def run_backtest():
             """Run a backtest."""
             try:
-                import numpy as np
-                import math
                 data = request.get_json()
                 symbol = data.get('symbol', 'AAPL')
                 strategy = data.get('strategy', 'MACD')
@@ -247,9 +262,32 @@ class DashboardApp:
                 if 'error' in results:
                     return jsonify(results), 400
                 
-                return jsonify(results)
+                # Convert any remaining numpy types to Python native types
+                def convert_numpy_types(obj):
+                    if isinstance(obj, dict):
+                        return {key: convert_numpy_types(value) for key, value in obj.items()}
+                    elif isinstance(obj, list):
+                        return [convert_numpy_types(item) for item in obj]
+                    elif isinstance(obj, np.integer):
+                        return int(obj)
+                    elif isinstance(obj, np.floating):
+                        return float(obj)
+                    elif isinstance(obj, np.ndarray):
+                        return obj.tolist()
+                    elif isinstance(obj, pd.Timestamp):
+                        return obj.isoformat()
+                    elif isinstance(obj, datetime):
+                        return obj.isoformat()
+                    else:
+                        return obj
+                
+                # Convert results to ensure JSON serialization
+                serializable_results = convert_numpy_types(results)
+                
+                return jsonify(serializable_results)
                 
             except Exception as e:
+                self.logger.error(f"Error in backtest API: {str(e)}")
                 return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/strategies')
