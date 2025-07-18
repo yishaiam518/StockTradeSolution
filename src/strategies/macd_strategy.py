@@ -23,6 +23,9 @@ class MACDStrategy(BaseStrategy):
         # Set the profile
         self.profile = profile
         
+        # Initialize position tracking
+        self.current_position = None
+        
         # Apply configuration if provided
         if config_dict:
             # Handle profile-based configuration

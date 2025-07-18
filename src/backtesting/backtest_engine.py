@@ -363,21 +363,21 @@ class BacktestEngine:
                                 # Execute buy (allocate 10% of capital per position)
                                 position_size = initial_capital * 0.1
                                 if current_capital >= position_size:
-                                    shares = position_size / current_price
+                                    shares = float(position_size / current_price)
                                     positions[symbol] = {
                                         'shares': shares,
-                                        'entry_price': current_price,
-                                        'entry_date': current_date
+                                        'entry_price': float(current_price),
+                                        'entry_date': str(current_date)
                                     }
                                     current_capital -= position_size
                                     
                                     trades.append({
-                                        'date': current_date,
+                                        'date': str(current_date),
                                         'symbol': symbol,
                                         'action': 'BUY',
                                         'shares': shares,
-                                        'price': current_price,
-                                        'value': shares * current_price,
+                                        'price': float(current_price),
+                                        'value': float(shares * current_price),
                                         'strategy': f"{strategy}_{profile}"
                                     })
                             
@@ -388,18 +388,18 @@ class BacktestEngine:
                                 entry_price = position['entry_price']
                                 
                                 # Calculate P&L
-                                pnl = (current_price - entry_price) * shares
-                                pnl_pct = ((current_price - entry_price) / entry_price) * 100
+                                pnl = float((current_price - entry_price) * shares)
+                                pnl_pct = float(((current_price - entry_price) / entry_price) * 100)
                                 
                                 current_capital += shares * current_price
                                 
                                 trades.append({
-                                    'date': current_date,
+                                    'date': str(current_date),
                                     'symbol': symbol,
                                     'action': 'SELL',
-                                    'shares': shares,
-                                    'price': current_price,
-                                    'value': shares * current_price,
+                                    'shares': float(shares),
+                                    'price': float(current_price),
+                                    'value': float(shares * current_price),
                                     'pnl': pnl,
                                     'pnl_pct': pnl_pct,
                                     'strategy': f"{strategy}_{profile}"
@@ -414,10 +414,10 @@ class BacktestEngine:
                         daily_portfolio_value += position['shares'] * current_price
                 
                 portfolio_values.append({
-                    'date': current_date,
-                    'value': daily_portfolio_value,
-                    'capital': current_capital,
-                    'positions': len(positions)
+                    'date': str(current_date),
+                    'value': float(daily_portfolio_value),
+                    'capital': float(current_capital),
+                    'positions': int(len(positions))
                 })
             
             # Calculate performance metrics
@@ -449,7 +449,7 @@ class BacktestEngine:
             
             # Basic metrics
             final_value = portfolio_values[-1]['value']
-            total_return = ((final_value - initial_capital) / initial_capital) * 100
+            total_return = float(((final_value - initial_capital) / initial_capital) * 100)
             
             # Calculate returns
             returns = []
@@ -461,45 +461,45 @@ class BacktestEngine:
             
             # Risk metrics
             if returns:
-                volatility = np.std(returns) * np.sqrt(252)  # Annualized
-                sharpe_ratio = (np.mean(returns) * 252) / volatility if volatility > 0 else 0
+                volatility = float(np.std(returns) * np.sqrt(252))  # Annualized
+                sharpe_ratio = float((np.mean(returns) * 252) / volatility) if volatility > 0 else 0.0
                 
                 # Maximum drawdown
                 cumulative_returns = np.cumprod(1 + np.array(returns))
                 running_max = np.maximum.accumulate(cumulative_returns)
                 drawdown = (cumulative_returns - running_max) / running_max
-                max_drawdown = np.min(drawdown) * 100
+                max_drawdown = float(np.min(drawdown) * 100)
             else:
-                volatility = 0
-                sharpe_ratio = 0
-                max_drawdown = 0
+                volatility = 0.0
+                sharpe_ratio = 0.0
+                max_drawdown = 0.0
             
             # Trade metrics
             total_trades = len(trades)
             winning_trades = len([t for t in trades if t.get('pnl', 0) > 0])
-            win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0
+            win_rate = float((winning_trades / total_trades * 100) if total_trades > 0 else 0)
             
             # Average trade metrics
             trade_returns = [t.get('pnl_pct', 0) for t in trades if 'pnl_pct' in t]
-            avg_trade_return = np.mean(trade_returns) if trade_returns else 0
+            avg_trade_return = float(np.mean(trade_returns) if trade_returns else 0)
             
             # Benchmark comparison
-            benchmark_return = 0
+            benchmark_return = 0.0
             if benchmark_data is not None and len(benchmark_data) > 0:
                 benchmark_start = benchmark_data.iloc[0]['close']
                 benchmark_end = benchmark_data.iloc[-1]['close']
-                benchmark_return = ((benchmark_end - benchmark_start) / benchmark_start) * 100
+                benchmark_return = float(((benchmark_end - benchmark_start) / benchmark_start) * 100)
             
-            alpha = total_return - benchmark_return
+            alpha = float(total_return - benchmark_return)
             
             return {
                 'total_return': total_return,
-                'final_value': final_value,
+                'final_value': float(final_value),
                 'volatility': volatility,
                 'sharpe_ratio': sharpe_ratio,
                 'max_drawdown': max_drawdown,
-                'total_trades': total_trades,
-                'winning_trades': winning_trades,
+                'total_trades': int(total_trades),
+                'winning_trades': int(winning_trades),
                 'win_rate': win_rate,
                 'avg_trade_return': avg_trade_return,
                 'benchmark_return': benchmark_return,
