@@ -1,140 +1,232 @@
-# SMART STOCK TRADING SYSTEM
+# 🚀 StockTradeSolution
 
-An AI-driven, modular stock trading system with comprehensive backtesting, strategy optimization, and educational insights.
+**Advanced Stock Trading System with Unified Architecture, Comprehensive Testing Framework, and Enhanced Dashboard Features**
 
-## 🚀 Features
+## 📊 Overview
 
-### Phase 1 - Core Features ✅
-- **Data Engine**: Historical and real-time stock data via yfinance
-- **Technical Indicators**: MACD, RSI, EMA, Bollinger Bands, Volume MA
-- **Strategy Engine**: Rule-based entry/exit conditions with scoring system
-- **Backtesting Engine**: Trade simulation with performance metrics
-- **Capital Projection**: Growth simulation with monthly targets
+StockTradeSolution is a sophisticated trading system that combines multiple strategies, risk management, and real-time automation. The system features a unified architecture where backtesting, historic backtesting, and automation use the same building blocks.
 
-### Phase 2 - Advanced Features 🔄
-- **Dashboard UI**: Interactive Streamlit dashboard
-- **Trade Analysis**: Detailed trade logic and performance analysis
-- **Dry Run Mode**: Real-time simulation without execution
-- **Risk Management**: Stop-loss, drawdown protection, circuit breakers
-- **Performance Benchmarking**: Sharpe ratio, Sortino ratio, max drawdown
+## 🎯 Key Features
 
-### Phase 3 - Scalability 🔄
-- **Strategy Diversification**: Multiple strategies and sectors
-- **Account Scaling**: Dynamic position sizing
-- **Trade Journal**: SQLite persistence with learning notes
-- **Deployment**: Git versioning and Docker support
+### 🔧 **Unified Architecture**
+- **Strategy + Profile Selection**: Choose from multiple MACD strategies with different risk profiles
+- **Unified Stock Scoring**: Separate scoring lists for backtesting, historic, and automation modes
+- **Modular Design**: Clean separation of concerns with reusable components
 
-### Phase 4 - AI Integration 🔄
-- **LLM-Powered Analysis**: GPT-based trade feedback and improvements
+### 📈 **Trading Strategies**
+- **MACD Canonical**: Pure MACD crossover strategy
+- **MACD Aggressive**: Higher risk, higher potential returns
+- **MACD Conservative**: Lower risk, steady returns
+- **Profile Management**: Conservative, Moderate, Aggressive risk profiles
 
-## 📁 Project Structure
+### 🧪 **Comprehensive Testing Framework**
+- **Multiple Test Scripts**: Unit tests, integration tests, performance benchmarks
+- **Automated Testing**: Run all tests with a single command
+- **Mock Data Generation**: Realistic testing scenarios
+- **Performance Benchmarking**: Memory and execution time analysis
+
+### 📊 **Enhanced Reporting**
+- **Detailed Trade Reports**: Full buy/sell dates, prices, P&L analysis
+- **Strategy Performance**: Individual strategy and profile analysis
+- **Risk Metrics**: Drawdown, volatility, Sharpe ratio calculations
+- **Symbol Analysis**: Performance breakdown by stock symbol
+
+### 🖥️ **Interactive Dashboard**
+- **Web-based GUI**: Modern, responsive interface
+- **Real-time Updates**: Live performance metrics
+- **Strategy Selection**: Dynamic strategy and profile configuration
+- **Trade History**: Comprehensive trade tracking
+
+## 🏗️ Architecture
 
 ```
 StockTradeSolution/
 ├── src/
-│   ├── data_engine/          # Data fetching and storage
-│   ├── indicators/           # Technical indicators
-│   ├── strategies/           # Trading strategies
 │   ├── backtesting/          # Backtesting engine
+│   ├── data_collection/      # Data collection and scheduling
+│   ├── data_engine/          # Data processing and storage
+│   ├── indicators/           # Technical indicators
+│   ├── machine_learning/     # ML models and scoring
+│   ├── portfolio_management/ # Portfolio optimization
+│   ├── real_time_trading/    # Live trading automation
 │   ├── risk_management/      # Risk controls
-│   ├── dashboard/            # Streamlit UI
-│   └── utils/               # Shared utilities
+│   ├── strategies/           # Trading strategies
+│   ├── utils/               # Utilities and configuration
+│   └── web_dashboard/       # Web interface
 ├── tests/                   # Test suite
 ├── config/                  # Configuration files
 ├── data/                    # Data storage
 ├── logs/                    # System logs
-└── docs/                    # Documentation
+└── models/                  # Trained models
 ```
 
-## 🛠️ Installation
+## 🚀 Quick Start
 
-1. Clone the repository:
+### 1. **Installation**
 ```bash
-git clone <repository-url>
+# Clone the repository
+git clone https://github.com/yishaiam518/StockTradeSolution.git
 cd StockTradeSolution
-```
 
-2. Install dependencies:
-```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-3. Run tests:
+### 2. **Run Tests**
 ```bash
-pytest tests/
+# Run all tests
+python run_all_tests.py
+
+# Run specific test
+python test_simple_verification.py
 ```
 
-4. Start the dashboard:
+### 3. **Generate Trade Report**
 ```bash
-streamlit run src/dashboard/main.py
+python generate_trade_report.py
 ```
 
-## 🧪 Testing
-
-The system includes comprehensive testing:
-- Unit tests for each module
-- Integration tests for data flow
-- Performance benchmarks
-- Strategy validation tests
-
-Run the full test suite:
+### 4. **Start Dashboard**
 ```bash
-python tests/test_suite.py
+python simple_dashboard.py
+# Access at: http://localhost:8080
 ```
 
-## 📊 Usage
+## 📊 Performance Highlights
 
-### Basic Backtesting
-```python
-from src.data_engine import DataEngine
-from src.strategies import MACDStrategy
-from src.backtesting import BacktestEngine
+### Recent Trade Report Summary (25 trades):
+- **76% Win Rate** (19 winning, 6 losing trades)
+- **$119,616.78 Total P&L**
+- **$4,784.67 Average P&L per trade**
+- **$22,369.06 Max Profit** vs **-$3,400.79 Max Loss**
 
-# Initialize components
-data_engine = DataEngine()
-strategy = MACDStrategy()
-backtest = BacktestEngine()
+### Strategy Performance:
+- **MACDCanonical**: $47,028.72 (23.2% avg return)
+- **MACDAggressive**: $30,981.85 (12.2% avg return)
+- **MACDConservative**: $41,606.21 (7.4% avg return)
 
-# Run backtest
-results = backtest.run(strategy, "AAPL", "2023-01-01", "2023-12-31")
-```
+### Profile Performance:
+- **Moderate**: $64,887.76 (21.9% avg return)
+- **Conservative**: $28,846.55 (5.7% avg return)
+- **Aggressive**: $25,882.47 (7.8% avg return)
 
-### Dashboard Access
-Launch the interactive dashboard to visualize:
-- Trade logs and performance
-- Capital growth projections
-- Strategy comparisons
-- Risk metrics
+## 🧪 Testing Framework
+
+### Test Scripts:
+- `test_simple_verification.py`: Basic functionality tests
+- `test_comprehensive_system.py`: Full system integration tests
+- `test_performance_benchmark.py`: Performance analysis
+- `run_all_tests.py`: Master test runner
+
+### Test Coverage:
+- ✅ Configuration loading
+- ✅ Data pipeline functionality
+- ✅ Strategy implementations
+- ✅ Technical indicators
+- ✅ Risk management
+- ✅ Portfolio management
+- ✅ Utility functions
+
+## 📈 Dashboard Features
+
+### Interactive Elements:
+- **Strategy Selection**: Choose from MACD variants
+- **Profile Configuration**: Risk profile management
+- **Backtesting**: Run simulations with custom parameters
+- **Performance Metrics**: Real-time performance tracking
+- **Trade History**: Detailed trade analysis
+
+### API Endpoints:
+- `/api/strategies`: Available strategies
+- `/api/profiles`: Risk profiles
+- `/api/backtest`: Run backtests
+- `/api/trades`: Trade history
+- `/api/performance`: Performance metrics
 
 ## 🔧 Configuration
 
-Edit `config/settings.yaml` to customize:
-- Default strategies
-- Risk parameters
-- Data sources
-- Dashboard settings
+### Main Configuration (`config/settings.yaml`):
+```yaml
+trading:
+  default_strategy: MACDCanonical
+  default_profile: moderate
+  risk_management:
+    max_position_size: 0.1
+    stop_loss: 0.05
+    take_profit: 0.15
 
-## 📈 Performance Metrics
+data:
+  sources:
+    - yahoo_finance
+    - alpha_vantage
+  update_frequency: 1h
 
-The system tracks:
-- Total Return
-- Sharpe Ratio
-- Maximum Drawdown
-- Win Rate
-- Average Trade Duration
-- Risk-Adjusted Returns
+backtesting:
+  start_date: 2023-01-01
+  end_date: 2023-12-31
+  initial_capital: 100000
+```
+
+## 📋 File Structure
+
+### Core Files:
+- `simple_dashboard.py`: Main dashboard application
+- `generate_trade_report.py`: Enhanced trade reporting
+- `run_all_tests.py`: Test orchestration
+- `src/trading_system.py`: Main trading system
+- `src/strategies/base_strategy.py`: Strategy framework
+
+### Documentation:
+- `TESTING_GUIDE.md`: Testing framework documentation
+- `UNIFIED_ARCHITECTURE.md`: Architecture overview
+- `ARCHITECTURE_IMPROVEMENTS.md`: Improvement roadmap
+
+## 🚧 Current Status
+
+### ✅ **Completed Features:**
+- Unified architecture with strategy + profile selection
+- Comprehensive testing framework
+- Enhanced trade reporting with detailed P&L analysis
+- Interactive web dashboard
+- Risk management and portfolio optimization
+- Real-time trading automation framework
+
+### 🔄 **In Progress:**
+- GUI improvements and additional features
+- Enhanced data collection and processing
+- Advanced machine learning models
+- Real-time market data integration
+
+### 📋 **Planned Features:**
+- Advanced charting and visualization
+- Multi-asset portfolio management
+- Social trading features
+- Mobile application
+- API for external integrations
 
 ## 🤝 Contributing
 
-1. Follow the modular development structure
-2. Write tests for new features
-3. Use black for code formatting
-4. Update documentation
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
-## 📝 License
+## 📄 License
 
-MIT License - see LICENSE file for details
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🚨 Disclaimer
+## 📞 Support
 
-This system is for educational and research purposes. Past performance does not guarantee future results. Always conduct thorough testing before live trading. 
+For questions, issues, or contributions, please:
+- Open an issue on GitHub
+- Check the documentation in the `/docs` folder
+- Review the testing guide for troubleshooting
+
+---
+
+**🎯 Built with ❤️ for advanced algorithmic trading** 
