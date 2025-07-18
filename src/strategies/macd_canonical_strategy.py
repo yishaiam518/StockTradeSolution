@@ -15,6 +15,9 @@ class MACDCanonicalStrategy(BaseStrategy):
     def __init__(self, config_dict=None):
         super().__init__(name="MACDCanonicalStrategy")
         
+        # Initialize position tracking
+        self.current_position = None
+        
         # Apply configuration if provided
         if config_dict:
             if 'entry_conditions' in config_dict:
@@ -36,6 +39,10 @@ class MACDCanonicalStrategy(BaseStrategy):
         """
         Entry signal: MACD line crosses above signal line (canonical MACD entry)
         """
+        if self.current_position is not None:
+            return False, {'summary': 'Already in position'}
+        if current_index < 1:
+            return False, {'summary': 'Insufficient data'}
         try:
             current_row = data.iloc[current_index]
             macd_crossover_up = bool(current_row.get('macd_crossover_up', False))
