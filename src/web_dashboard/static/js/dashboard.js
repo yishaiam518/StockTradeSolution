@@ -852,14 +852,15 @@ function displayBacktestResults(results) {
         return;
     }
     
-    // Extract data from results
-    const totalTrades = results.total_trades || 0;
-    const finalEquity = results.final_equity || 0;
-    const totalReturn = results.total_return || 0;
-    const sharpeRatio = results.sharpe_ratio || 0;
-    const tradeLog = results.trade_log || [];
+    // Extract data from results - handle both old and new structure
+    const trades = results.trades || [];
+    const performance = results.performance || {};
+    const totalTrades = performance.total_trades || trades.length || 0;
+    const finalValue = performance.final_value || 0;
+    const totalReturn = performance.total_return || 0;
+    const sharpeRatio = performance.sharpe_ratio || 0;
     
-    console.log('Parsed data:', { totalTrades, finalEquity, totalReturn, sharpeRatio, tradesCount: tradeLog.length });
+    console.log('Parsed data:', { totalTrades, finalValue, totalReturn, sharpeRatio, tradesCount: trades.length });
     
     // Update summary metrics
     const totalTradesElement = document.getElementById('total-trades');
@@ -872,7 +873,7 @@ function displayBacktestResults(results) {
         totalReturnElement.textContent = `${totalReturn.toFixed(2)}%`;
         totalReturnElement.style.color = totalReturn >= 0 ? '#27ae60' : '#e74c3c';
     }
-    if (finalValueElement) finalValueElement.textContent = formatCurrency(finalEquity);
+    if (finalValueElement) finalValueElement.textContent = formatCurrency(finalValue);
     if (sharpeRatioElement) sharpeRatioElement.textContent = sharpeRatio.toFixed(3);
     
     // Update CLI-like output with trade details
@@ -880,21 +881,22 @@ function displayBacktestResults(results) {
     if (logContainer) {
         logContainer.innerHTML += '<span style="color: #ffff00;">📋 Processing ' + totalTrades + ' completed trades...</span><br>';
         
-        if (tradeLog.length === 0) {
+        if (trades.length === 0) {
             logContainer.innerHTML += '<span style="color: #ff0000;">❌ No trades executed</span><br>';
         } else {
-            // Display each trade from the trade_log
-            tradeLog.forEach((trade, index) => {
-                const entryPrice = trade.entry_price || 0;
-                const exitPrice = trade.exit_price || 0;
+            // Display each trade from the trades array
+            trades.forEach((trade, index) => {
+                const action = trade.action || 'BUY';
                 const shares = trade.shares || 0;
-                const pnlPct = (trade.pnl || 0) * 100;
-                const pnlDollars = (trade.pnl || 0) * shares * entryPrice;
-                const entryDate = trade.entry_date || 'Unknown';
-                const exitDate = trade.exit_date || 'Unknown';
+                const price = trade.price || 0;
+                const pnl = trade.pnl || 0;
+                const pnlPct = trade.pnl_pct || 0;
+                const date = trade.date || 'Unknown';
+                const symbol = trade.symbol || 'Unknown';
+                const reason = trade.reason || 'Signal';
                 
-                const logColor = pnlPct >= 0 ? '#00ff00' : '#ff0000';
-                logContainer.innerHTML += `<span style="color: ${logColor};">💰 Trade ${index + 1}: BUY ${shares.toFixed(2)} shares at $${entryPrice.toFixed(2)} on ${entryDate} → SELL at $${exitPrice.toFixed(2)} on ${exitDate} (${pnlPct.toFixed(2)}%)</span><br>`;
+                const logColor = pnl >= 0 ? '#00ff00' : '#ff0000';
+                logContainer.innerHTML += `<span style="color: ${logColor};">💰 Trade ${index + 1}: ${action} ${shares.toFixed(2)} shares of ${symbol} at $${price.toFixed(2)} on ${date} (${pnlPct.toFixed(2)}%) - ${reason}</span><br>`;
             });
             
             logContainer.innerHTML += '<span style="color: #00ff00;">✅ All trades processed and displayed!</span><br>';
@@ -908,9 +910,9 @@ function displayBacktestResults(results) {
     const outperformanceElement = document.getElementById('outperformance');
     
     if (strategyReturnElement && benchmarkReturnElement && alphaReturnElement && outperformanceElement) {
-        const strategyReturn = totalReturn; // Use the totalReturn calculated earlier
-        const benchmarkReturn = results.benchmark_return || 0;
-        const alpha = strategyReturn - benchmarkReturn;
+        const strategyReturn = totalReturn;
+        const benchmarkReturn = performance.benchmark_return || 0;
+        const alpha = performance.alpha || (strategyReturn - benchmarkReturn);
         
         strategyReturnElement.textContent = strategyReturn.toFixed(2) + '%';
         strategyReturnElement.style.color = strategyReturn >= 0 ? '#27ae60' : '#e74c3c';

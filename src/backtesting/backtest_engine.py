@@ -99,7 +99,7 @@ class BacktestEngine:
                 benchmark_data = self._get_trading_system().prepare_data(benchmark, start_date, end_date)
             
             # Run backtest simulation
-            results = self._run_simulation(data, strategy, profile, benchmark_data)
+            results = self._run_simulation(data, strategy, profile, benchmark_data, symbol)
             
             # Store results
             self.backtest_results = results
@@ -192,7 +192,7 @@ class BacktestEngine:
             return {'error': str(e)}
     
     def _run_simulation(self, data: pd.DataFrame, strategy: str, profile: str, 
-                       benchmark_data: pd.DataFrame = None) -> Dict[str, Any]:
+                       benchmark_data: pd.DataFrame = None, symbol: str = None) -> Dict[str, Any]:
         """
         Run a single-stock backtest simulation.
         
@@ -201,6 +201,7 @@ class BacktestEngine:
             strategy: Strategy name
             profile: Strategy profile
             benchmark_data: Benchmark data for comparison
+            symbol: Stock symbol (optional, will use data.name if not provided)
             
         Returns:
             Dictionary with simulation results
@@ -219,11 +220,14 @@ class BacktestEngine:
             # Get strategy instance for direct access
             strategy_instance = self._get_trading_system().get_strategy(strategy)
             
+            # Determine symbol name
+            if symbol is None:
+                symbol = data.name if hasattr(data, 'name') and data.name else 'UNKNOWN'
+            
             # Run simulation day by day
             for i in range(len(data)):
                 current_date = data.index[i]
                 current_price = float(data.iloc[i]['close'])
-                symbol = data.name if hasattr(data, 'name') else 'UNKNOWN'
                 
                 # Check for exit signals first (if we have a position)
                 if symbol in positions:
@@ -242,13 +246,13 @@ class BacktestEngine:
                         pnl = float((current_price - entry_price) * shares)
                         pnl_pct = float(((current_price - entry_price) / entry_price) * 100)
                         
-                        current_capital = shares * current_price
+                        current_capital += shares * current_price
                         
                         trades.append({
                             'date': str(current_date),
                             'symbol': symbol,
                             'action': 'SELL',
-                            'shares': float(shares),
+                            'shares': shares,
                             'price': float(current_price),
                             'value': float(shares * current_price),
                             'pnl': pnl,
@@ -267,31 +271,33 @@ class BacktestEngine:
                     should_entry, entry_reason = strategy_instance.should_entry(data, i)
                     
                     if should_entry:
-                        # Execute buy
-                        shares = current_capital / current_price
-                        positions[symbol] = {
-                            'shares': float(shares),
-                            'entry_price': float(current_price),
-                            'entry_date': str(current_date)
-                        }
-                        current_capital = 0
-                        
-                        trades.append({
-                            'date': str(current_date),
-                            'symbol': symbol,
-                            'action': 'BUY',
-                            'shares': float(shares),
-                            'price': float(current_price),
-                            'value': float(shares * current_price),
-                            'strategy': f"{strategy}_{profile}",
-                            'reason': entry_reason.get('summary', 'Entry signal')
-                        })
-                        
-                        self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
+                        # Execute buy (allocate 10% of capital per position)
+                        position_size = initial_capital * 0.1
+                        if current_capital >= position_size:
+                            shares = float(position_size / current_price)
+                            positions[symbol] = {
+                                'shares': shares,
+                                'entry_price': float(current_price),
+                                'entry_date': str(current_date)
+                            }
+                            current_capital -= position_size
+                            
+                            trades.append({
+                                'date': str(current_date),
+                                'symbol': symbol,
+                                'action': 'BUY',
+                                'shares': shares,
+                                'price': float(current_price),
+                                'value': float(shares * current_price),
+                                'strategy': f"{strategy}_{profile}",
+                                'reason': entry_reason.get('summary', 'Entry signal')
+                            })
+                            
+                            self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
                 
-                # Calculate current portfolio value
-                portfolio_value = float(current_capital)
-                for symbol, position in positions.items():
+                # Calculate portfolio value for this day
+                portfolio_value = current_capital
+                for pos_symbol, position in positions.items():
                     portfolio_value += position['shares'] * current_price
                 
                 portfolio_values.append({
@@ -312,7 +318,7 @@ class BacktestEngine:
                 'performance': performance,
                 'strategy': strategy,
                 'profile': profile,
-                'symbol': data.name if hasattr(data, 'name') else 'UNKNOWN'
+                'symbol': symbol
             }
             
         except Exception as e:
