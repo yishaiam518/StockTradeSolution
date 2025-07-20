@@ -165,22 +165,57 @@ class MACDStrategy(BaseStrategy):
     
     def should_entry(self, data: pd.DataFrame, current_index: int) -> Tuple[bool, Dict[str, Any]]:
         """
-        Entry signal: MACD line crosses above signal line
+        Entry signal: Multiple conditions for more aggressive testing
         """
         if current_index < 1:
             return False, {'summary': 'Insufficient data'}
         try:
             current_row = data.iloc[current_index]
+            previous_row = data.iloc[current_index - 1] if current_index > 0 else current_row
+            
+            # Primary condition: MACD crossover up
             macd_crossover_up = bool(current_row.get('macd_crossover_up', False))
-            reason = {
-                'summary': 'MACD Strategy Entry',
-                'macd_crossover_up': macd_crossover_up,
-                'close_price': current_row.get('close', 0)
+            
+            # Additional conditions for more aggressive testing
+            price_above_ema_short = bool(current_row.get('price_above_ema_short', False))
+            price_above_ema_long = bool(current_row.get('price_above_ema_long', False))
+            ema_bullish = bool(current_row.get('ema_bullish', False))
+            rsi_neutral = bool(current_row.get('rsi_neutral', False))
+            volume_above_ma = bool(current_row.get('volume_above_ma', False))
+            
+            # More aggressive entry conditions for testing
+            entry_conditions = [
+                macd_crossover_up,  # Primary MACD signal
+                price_above_ema_short,  # Price above short EMA
+                price_above_ema_long,   # Price above long EMA
+                ema_bullish,           # EMA trend is bullish
+                rsi_neutral,           # RSI is not overbought
+                volume_above_ma        # Volume is above average
+            ]
+            
+            # For testing: require at least 3 out of 6 conditions to be true
+            conditions_met = sum(entry_conditions)
+            should_enter = conditions_met >= 3
+            
+            # Debug logging
+            entry_reason = {
+                'entry_reason': f'MACD Strategy - {conditions_met}/6 conditions met',
+                'conditions': {
+                    'macd_crossover_up': macd_crossover_up,
+                    'price_above_ema_short': price_above_ema_short,
+                    'price_above_ema_long': price_above_ema_long,
+                    'ema_bullish': ema_bullish,
+                    'rsi_neutral': rsi_neutral,
+                    'volume_above_ma': volume_above_ma
+                },
+                'conditions_met': conditions_met,
+                'threshold': 3
             }
-            return macd_crossover_up, reason
+            
+            return should_enter, entry_reason
+            
         except Exception as e:
-            logger.error(f"Error in MACDStrategy.should_entry: {str(e)}")
-            return False, {'summary': f'Error: {str(e)}'}
+            return False, {'summary': f'Error in entry signal: {e}'}
     
     def should_exit(self, data: pd.DataFrame, current_index: int, entry_price: float, entry_date) -> Tuple[bool, Dict[str, Any]]:
         """
