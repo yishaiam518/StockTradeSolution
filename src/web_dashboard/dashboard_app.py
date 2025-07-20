@@ -675,7 +675,51 @@ class DashboardApp:
                 if 'error' in results:
                     return jsonify(results), 400
                 
-                return jsonify(results)
+                # Flatten the results for frontend compatibility
+                flattened_results = {
+                    'strategy': results.get('strategy', strategy),
+                    'profile': results.get('profile', profile),
+                    'start_date': start_date,
+                    'end_date': end_date,
+                    'benchmark': benchmark,
+                    'trades': results.get('trades', []),
+                    'portfolio_values': results.get('portfolio_values', []),
+                    'symbols': results.get('symbols', [])
+                }
+                
+                # Extract performance metrics from nested structure
+                performance = results.get('performance', {})
+                if performance:
+                    flattened_results.update({
+                        'total_return': performance.get('total_return', 0.0),
+                        'final_value': performance.get('final_value', 0.0),
+                        'volatility': performance.get('volatility', 0.0),
+                        'sharpe_ratio': performance.get('sharpe_ratio', 0.0),
+                        'max_drawdown': performance.get('max_drawdown', 0.0),
+                        'total_trades': performance.get('total_trades', 0),
+                        'winning_trades': performance.get('winning_trades', 0),
+                        'win_rate': performance.get('win_rate', 0.0),
+                        'avg_trade_return': performance.get('avg_trade_return', 0.0),
+                        'benchmark_return': performance.get('benchmark_return', 0.0),
+                        'alpha': performance.get('alpha', 0.0)
+                    })
+                else:
+                    # Default values if no performance data
+                    flattened_results.update({
+                        'total_return': 0.0,
+                        'final_value': 0.0,
+                        'volatility': 0.0,
+                        'sharpe_ratio': 0.0,
+                        'max_drawdown': 0.0,
+                        'total_trades': 0,
+                        'winning_trades': 0,
+                        'win_rate': 0.0,
+                        'avg_trade_return': 0.0,
+                        'benchmark_return': 0.0,
+                        'alpha': 0.0
+                    })
+                
+                return jsonify(flattened_results)
                 
             except Exception as e:
                 return jsonify({'error': str(e)}), 500

@@ -126,23 +126,30 @@ class UnifiedStockScorer:
             if mode == ScoringMode.BACKTESTING and symbol:
                 # For backtesting, score only the specified symbol
                 symbols = [symbol]
+                self.logger.info(f"Backtesting mode: scoring single symbol {symbol}")
             elif mode == ScoringMode.HISTORICAL:
                 # For historical, use all available stocks
                 symbols = self._get_all_stocks()
+                self.logger.info(f"Historical mode: scoring {len(symbols)} symbols")
             else:  # AUTOMATION
                 # For automation, use watchlist
                 symbols = self._get_watchlist_stocks()
+                self.logger.info(f"Automation mode: scoring {len(symbols)} symbols")
             
             # Limit to max_stocks
             symbols = symbols[:max_stocks]
+            self.logger.info(f"Limited to {len(symbols)} symbols for scoring")
             
             # Score each stock
             scores = []
+            successful_scores = 0
             for sym in symbols:
                 try:
                     score = self._score_single_stock(sym, strategy, profile, mode)
                     if score and score.score >= min_score:
                         scores.append(score)
+                        successful_scores += 1
+                        self.logger.debug(f"Scored {sym}: {score.score:.3f}")
                 except Exception as e:
                     self.logger.warning(f"Error scoring {sym}: {str(e)}")
                     continue
@@ -153,7 +160,7 @@ class UnifiedStockScorer:
             # Store in mode-specific list
             self.scoring_lists[mode] = scores
             
-            self.logger.info(f"Created {mode.value} scoring list with {len(scores)} stocks")
+            self.logger.info(f"Created {mode.value} scoring list with {len(scores)} stocks (successful scores: {successful_scores})")
             return scores
             
         except Exception as e:
@@ -218,9 +225,14 @@ class UnifiedStockScorer:
                 if datetime.now() - cached_score.timestamp < self.cache_duration:
                     return cached_score
             
-            # Get recent data for scoring
+            # Get data for scoring based on mode
             end_date = datetime.now()
-            start_date = end_date - timedelta(days=30)  # 30 days of data
+            if mode == ScoringMode.HISTORICAL:
+                # For historical mode, get 1 year of data for scoring
+                start_date = end_date - timedelta(days=365)
+            else:
+                # For other modes, get 30 days of recent data
+                start_date = end_date - timedelta(days=30)
             
             data = self.data_engine.fetch_data(symbol, start_date.strftime('%Y-%m-%d'), 
                                              end_date.strftime('%Y-%m-%d'))
@@ -296,16 +308,24 @@ class UnifiedStockScorer:
         
         # Get stocks from all data sources
         data_sources = self.config.get('data_collection', {}).get('sources', [])
+        self.logger.info(f"Found {len(data_sources)} data sources in config")
+        
         for source in data_sources:
             symbols = source.get('symbols', [])
+            self.logger.info(f"Source {source.get('name', 'Unknown')}: {len(symbols)} symbols")
             all_stocks.extend(symbols)
         
         # Also get stocks from automation watchlist
         watchlist = self.config.get('automation', {}).get('watchlist', [])
+        self.logger.info(f"Watchlist: {len(watchlist)} symbols")
         all_stocks.extend(watchlist)
         
         # Remove duplicates and return
-        return list(set(all_stocks))
+        unique_stocks = list(set(all_stocks))
+        self.logger.info(f"Total unique stocks available: {len(unique_stocks)}")
+        self.logger.info(f"Sample stocks: {unique_stocks[:10]}")
+        
+        return unique_stocks
     
     def _get_watchlist_stocks(self) -> List[str]:
         """Get stocks from the watchlist."""
