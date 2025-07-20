@@ -362,7 +362,8 @@ class BacktestEngine:
             
             # Run simulation day by day
             for current_date in all_dates:
-                daily_portfolio_value = current_capital
+                # Calculate current portfolio value (cash + all positions)
+                portfolio_value = current_capital
                 
                 # Check each stock for signals
                 for symbol, data in stock_data.items():
@@ -412,8 +413,8 @@ class BacktestEngine:
                             should_entry, entry_reason = strategy_instance.should_entry(data, current_index)
                             
                             if should_entry:
-                                # Execute buy (allocate 10% of capital per position)
-                                position_size = initial_capital * 0.1
+                                # Execute buy (allocate 5% of initial capital per position)
+                                position_size = initial_capital * 0.05
                                 if current_capital >= position_size:
                                     shares = float(position_size / current_price)
                                     positions[symbol] = {
@@ -435,15 +436,17 @@ class BacktestEngine:
                                     })
                                     
                                     self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
-                        
-                        # Update daily portfolio value for this stock
-                        if symbol in positions:
-                            daily_portfolio_value += positions[symbol]['shares'] * current_price
+                
+                # Calculate total portfolio value including all positions
+                for symbol, position in positions.items():
+                    if symbol in stock_data and current_date in stock_data[symbol].index:
+                        current_price = float(stock_data[symbol].loc[current_date]['close'])
+                        portfolio_value += position['shares'] * current_price
                 
                 # Record portfolio value for this day
                 portfolio_values.append({
                     'date': str(current_date),
-                    'value': float(daily_portfolio_value),
+                    'value': float(portfolio_value),
                     'capital': float(current_capital),
                     'positions': int(len(positions))
                 })

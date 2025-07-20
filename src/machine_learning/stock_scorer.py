@@ -295,12 +295,17 @@ class UnifiedStockScorer:
         all_stocks = []
         
         # Get stocks from all data sources
-        data_sources = self.config.get('data_collection.sources', [])
+        data_sources = self.config.get('data_collection', {}).get('sources', [])
         for source in data_sources:
             symbols = source.get('symbols', [])
             all_stocks.extend(symbols)
         
-        return list(set(all_stocks))  # Remove duplicates
+        # Also get stocks from automation watchlist
+        watchlist = self.config.get('automation', {}).get('watchlist', [])
+        all_stocks.extend(watchlist)
+        
+        # Remove duplicates and return
+        return list(set(all_stocks))
     
     def _get_watchlist_stocks(self) -> List[str]:
         """Get stocks from the watchlist."""
