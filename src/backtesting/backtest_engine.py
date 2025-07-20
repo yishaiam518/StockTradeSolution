@@ -1,46 +1,52 @@
 """
 Backtesting Engine for the SMART STOCK TRADING SYSTEM.
 
-This module provides backtesting functionality using the unified scoring system
-and strategy+profile architecture.
+This module provides comprehensive backtesting capabilities:
+- Single and multi-stock backtesting
+- Historical backtesting with unified scoring
+- Performance metrics calculation
+- Strategy profile integration
+- Risk management and position sizing
 """
 
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-from typing import Dict, Any, List, Optional, Tuple
-import json
+from typing import Dict, List, Optional, Any, Tuple
+import logging
 
-from ..utils.logger import get_logger
-from ..machine_learning.stock_scorer import ScoringMode
-
-logger = get_logger(__name__)
+from src.utils.config_loader import ConfigLoader
+from src.utils.logger import get_logger
+from src.machine_learning.stock_scorer import ScoringMode
 
 
 class BacktestEngine:
     """
-    Backtesting engine that uses the unified scoring system.
-    
-    This engine:
-    - Creates scoring lists for backtesting mode
-    - Generates trading signals using strategy+profile
-    - Simulates trading based on signals
-    - Provides comprehensive performance metrics
+    Comprehensive backtesting engine that supports:
+    - Single stock backtesting
+    - Multi-stock historical backtesting
+    - Strategy profile integration
+    - Performance metrics calculation
+    - Risk management
     """
     
-    def __init__(self):
+    def __init__(self, config_path: str = "config/settings.yaml"):
         """Initialize the backtesting engine."""
+        self.config = ConfigLoader(config_path)
         self.logger = get_logger(__name__)
         
-        # Backtest state
-        self.current_backtest = None
+        # Backtest results storage
         self.backtest_results = {}
+        self.current_backtest = None
+        
+        # Lazy loading for trading system
+        self._trading_system = None
         
         self.logger.info("Backtest Engine initialized")
     
     def _get_trading_system(self):
-        """Lazy load the trading system to avoid circular imports."""
-        if not hasattr(self, '_trading_system'):
+        """Get the trading system instance with lazy loading."""
+        if self._trading_system is None:
             from ..trading_system import get_trading_system
             self._trading_system = get_trading_system()
         return self._trading_system
