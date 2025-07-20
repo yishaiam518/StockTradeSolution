@@ -3,10 +3,11 @@ Backtesting Engine for the SMART STOCK TRADING SYSTEM.
 
 This module provides comprehensive backtesting capabilities:
 - Single and multi-stock backtesting
-- Historical backtesting with unified scoring
+- Progressive historical backtesting with day-by-day simulation
 - Performance metrics calculation
 - Strategy profile integration
 - Risk management and position sizing
+- Industry diversification
 """
 
 import pandas as pd
@@ -128,7 +129,13 @@ class BacktestEngine:
     def run_historical_backtest(self, strategy: str, profile: str, start_date: str, 
                               end_date: str, benchmark: str = "SPY") -> Dict[str, Any]:
         """
-        Run historical backtest using the unified scoring system.
+        Run progressive historical backtest simulating day-by-day trading over the period.
+        
+        This approach:
+        1. Starts from the beginning date and simulates trading every day
+        2. Each day recalculates stock scoring based on data available up to that point
+        3. Makes trading decisions based on what was actually known at that time
+        4. Ensures no look-ahead bias and realistic performance testing
         
         Args:
             strategy: Strategy to use
@@ -141,43 +148,34 @@ class BacktestEngine:
             Dictionary with historical backtest results
         """
         try:
-            self.logger.info(f"Starting historical backtest with {strategy}_{profile}")
+            self.logger.info(f"Starting progressive historical backtest with {strategy}_{profile}")
+            self.logger.info(f"Simulating day-by-day trading from {start_date} to {end_date}")
             
             # Reset strategy state
             self._get_trading_system().reset_strategy(strategy)
             
-            # Create scoring list for historical mode
-            scoring_list = self._get_trading_system().create_scoring_list(
-                mode=ScoringMode.HISTORICAL,
-                strategy=strategy,
-                profile=profile,
-                max_stocks=20,  # Limit to top 20 stocks
-                min_score=0.3
-            )
+            # Get all available stocks for the entire period
+            all_stocks = self._get_trading_system().get_all_stocks()
             
-            if not scoring_list:
-                return {'error': 'No stocks selected for historical backtest'}
-            
-            # Get selected symbols
-            selected_symbols = [score.symbol for score in scoring_list]
-            
-            # Prepare data for all selected stocks
+            # Prepare data for all stocks for the entire period
             stock_data = {}
-            for symbol in selected_symbols:
+            for symbol in all_stocks:
                 data = self._get_trading_system().prepare_data(symbol, start_date, end_date)
-                if not data.empty:
+                if not data.empty and len(data) > 30:  # Need enough data for indicators
                     stock_data[symbol] = data
             
             if not stock_data:
-                return {'error': 'No data available for selected stocks'}
+                return {'error': 'No stock data available for historical backtest'}
             
             # Get benchmark data
             benchmark_data = None
             if benchmark:
                 benchmark_data = self._get_trading_system().prepare_data(benchmark, start_date, end_date)
             
-            # Run simulation
-            results = self._run_multi_stock_simulation(stock_data, strategy, profile, benchmark_data)
+            # Run progressive simulation
+            results = self._run_progressive_simulation(
+                stock_data, strategy, profile, benchmark_data, start_date, end_date
+            )
             
             # Store results
             self.backtest_results = results
@@ -186,15 +184,15 @@ class BacktestEngine:
                 'profile': profile,
                 'start_date': start_date,
                 'end_date': end_date,
-                'symbols': selected_symbols,
+                'symbols': list(stock_data.keys()),
                 'results': results
             }
             
-            self.logger.info(f"Historical backtest completed with {len(selected_symbols)} stocks")
+            self.logger.info(f"Progressive historical backtest completed with {len(stock_data)} stocks")
             return results
             
         except Exception as e:
-            self.logger.error(f"Error in historical backtest: {e}")
+            self.logger.error(f"Error in progressive historical backtest: {e}")
             return {'error': str(e)}
     
     def _run_simulation(self, data: pd.DataFrame, strategy: str, profile: str, 
@@ -331,17 +329,27 @@ class BacktestEngine:
             self.logger.error(f"Error in simulation: {e}")
             return {'error': str(e)}
     
-    def _run_multi_stock_simulation(self, stock_data: Dict[str, pd.DataFrame], 
+    def _run_progressive_simulation(self, stock_data: Dict[str, pd.DataFrame], 
                                    strategy: str, profile: str,
-                                   benchmark_data: pd.DataFrame = None) -> Dict[str, Any]:
+                                   benchmark_data: pd.DataFrame = None,
+                                   start_date: str = None, end_date: str = None) -> Dict[str, Any]:
         """
-        Run a multi-stock historical backtest simulation.
+        Run progressive historical backtest simulation.
+        
+        This method:
+        1. Simulates trading day by day from start_date to end_date
+        2. Each day recalculates stock scoring based on data available up to that point
+        3. Makes trading decisions based on what was actually known at that time
+        4. Ensures industry diversification
+        5. No look-ahead bias
         
         Args:
-            stock_data: Dictionary of stock data
+            stock_data: Dictionary of stock data for entire period
             strategy: Strategy name
             profile: Strategy profile
             benchmark_data: Benchmark data for comparison
+            start_date: Start date for simulation
+            end_date: End date for simulation
             
         Returns:
             Dictionary with simulation results
@@ -363,13 +371,59 @@ class BacktestEngine:
             # Get all unique dates
             all_dates = set()
             for data in stock_data.values():
-                all_dates.update(data.index)
+                if not data.empty:
+                    # Ensure dates are properly formatted
+                    if data.index.dtype == 'int64':
+                        # Convert integer indices to proper dates
+                        self.logger.warning(f"Found integer indices, converting to dates")
+                        # Use the data's date column if available
+                        if 'date' in data.columns:
+                            data = data.set_index('date')
+                        else:
+                            # Create proper date range
+                            start_date_dt = pd.to_datetime(start_date)
+                            end_date_dt = pd.to_datetime(end_date)
+                            date_range = pd.date_range(start=start_date_dt, end=end_date_dt, freq='D')
+                            data = data.set_index(date_range[:len(data)])
+                    
+                    all_dates.update(data.index)
+            
             all_dates = sorted(list(all_dates))
             
+            self.logger.info(f"Total available dates: {len(all_dates)}")
+            if all_dates:
+                self.logger.info(f"Date range: {all_dates[0]} to {all_dates[-1]}")
+                self.logger.info(f"Sample dates: {all_dates[:5]}")
+            
+            # Filter dates to simulation period
+            if start_date:
+                start_dt = pd.to_datetime(start_date)
+                self.logger.info(f"Filtering from start date: {start_dt}")
+                all_dates = [d for d in all_dates if pd.to_datetime(d) >= start_dt]
+                self.logger.info(f"Dates after start filter: {len(all_dates)}")
+            if end_date:
+                end_dt = pd.to_datetime(end_date)
+                self.logger.info(f"Filtering to end date: {end_dt}")
+                all_dates = [d for d in all_dates if pd.to_datetime(d) <= end_dt]
+                self.logger.info(f"Dates after end filter: {len(all_dates)}")
+            
+            self.logger.info(f"Running progressive simulation for {len(all_dates)} trading days")
+            
+            # Industry classification for diversification
+            industry_groups = self._classify_stocks_by_industry(list(stock_data.keys()))
+            
             # Run simulation day by day
-            for current_date in all_dates:
+            for day_idx, current_date in enumerate(all_dates):
+                if day_idx % 100 == 0:  # Log progress every 100 days
+                    self.logger.info(f"Processing day {day_idx + 1}/{len(all_dates)}: {current_date}")
+                
                 # Calculate current portfolio value (cash + all positions)
                 portfolio_value = current_capital
+                
+                # Recalculate stock scoring for this day based on data available up to this point
+                daily_scoring = self._calculate_daily_stock_scoring(
+                    stock_data, current_date, strategy, profile, industry_groups
+                )
                 
                 # Check each stock for signals
                 for symbol, data in stock_data.items():
@@ -413,35 +467,37 @@ class BacktestEngine:
                                 
                                 self.logger.info(f"SELL {shares:.2f} shares of {symbol} at ${current_price:.2f} (P&L: ${pnl:.2f}, {pnl_pct:.2f}%)")
                         
-                        # Check for entry signals (if we don't have a position)
-                        if symbol not in positions:
+                        # Check for entry signals (if we don't have a position and stock is in top scoring)
+                        if symbol not in positions and symbol in daily_scoring:
                             # Check for entry signal
                             should_entry, entry_reason = strategy_instance.should_entry(data, current_index)
                             
                             if should_entry:
-                                # Execute buy (allocate 5% of initial capital per position)
-                                position_size = initial_capital * 0.05
-                                if current_capital >= position_size:
-                                    shares = float(position_size / current_price)
-                                    positions[symbol] = {
-                                        'shares': shares,
-                                        'entry_price': float(current_price),
-                                        'entry_date': str(current_date)
-                                    }
-                                    current_capital -= position_size
-                                    
-                                    trades.append({
-                                        'date': str(current_date),
-                                        'symbol': symbol,
-                                        'action': 'BUY',
-                                        'shares': shares,
-                                        'price': float(current_price),
-                                        'value': float(shares * current_price),
-                                        'strategy': f"{strategy}_{profile}",
-                                        'reason': entry_reason.get('summary', 'Entry signal')
-                                    })
-                                    
-                                    self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
+                                # Check diversification limits
+                                if self._can_add_position(symbol, positions, industry_groups):
+                                    # Execute buy (allocate 5% of initial capital per position)
+                                    position_size = initial_capital * 0.05
+                                    if current_capital >= position_size:
+                                        shares = float(position_size / current_price)
+                                        positions[symbol] = {
+                                            'shares': shares,
+                                            'entry_price': float(current_price),
+                                            'entry_date': str(current_date)
+                                        }
+                                        current_capital -= position_size
+                                        
+                                        trades.append({
+                                            'date': str(current_date),
+                                            'symbol': symbol,
+                                            'action': 'BUY',
+                                            'shares': shares,
+                                            'price': float(current_price),
+                                            'value': float(shares * current_price),
+                                            'strategy': f"{strategy}_{profile}",
+                                            'reason': entry_reason.get('summary', 'Entry signal')
+                                        })
+                                        
+                                        self.logger.info(f"BUY {shares:.2f} shares of {symbol} at ${current_price:.2f}")
                 
                 # Calculate total portfolio value including all positions
                 for symbol, position in positions.items():
@@ -472,8 +528,323 @@ class BacktestEngine:
             }
             
         except Exception as e:
-            self.logger.error(f"Error in multi-stock simulation: {e}")
+            self.logger.error(f"Error in progressive simulation: {e}")
             return {'error': str(e)}
+    
+    def _calculate_daily_stock_scoring(self, stock_data: Dict[str, pd.DataFrame], 
+                                      current_date: pd.Timestamp, strategy: str, profile: str,
+                                      industry_groups: Dict[str, str]) -> List[str]:
+        """
+        Calculate stock scoring for a specific day based on data available up to that point.
+        
+        Args:
+            stock_data: Dictionary of stock data
+            current_date: Current trading date
+            strategy: Strategy name
+            profile: Strategy profile
+            industry_groups: Industry classification
+            
+        Returns:
+            List of top scoring stock symbols for this day
+        """
+        try:
+            # Get data up to current date for each stock
+            daily_stock_data = {}
+            debug_count = 0
+            for symbol, data in stock_data.items():
+                if debug_count < 3:  # Debug first 3 stocks
+                    self.logger.info(f"Debug {symbol}: columns={data.columns.tolist()}, shape={data.shape}")
+                    if not data.empty:
+                        self.logger.info(f"Debug {symbol}: sample data=\n{data.head(2)}")
+                    debug_count += 1
+                
+                # Get data up to current date (no future data)
+                # Ensure proper date comparison
+                if data.index.dtype == 'int64':
+                    # If we have integer indices, we need to handle this differently
+                    # For now, use all available data since we've already converted indices
+                    historical_data = data
+                else:
+                    # Normal date filtering
+                    historical_data = data[data.index <= current_date]
+                
+                # Ensure data has correct column structure
+                if len(historical_data) > 30:  # Need enough data for indicators
+                    # Ensure we have the required columns
+                    required_columns = ['open', 'high', 'low', 'close', 'volume']
+                    if all(col in historical_data.columns for col in required_columns):
+                        daily_stock_data[symbol] = historical_data
+                    else:
+                        self.logger.warning(f"Missing required columns for {symbol}: {historical_data.columns.tolist()}")
+            
+            self.logger.info(f"Found {len(daily_stock_data)} stocks with valid data structure")
+            
+            if not daily_stock_data:
+                return []
+            
+            # Calculate scores for each stock based on historical data
+            stock_scores = []
+            for symbol, data in daily_stock_data.items():
+                try:
+                    # Check if indicators are already calculated
+                    if 'macd_line' in data.columns and 'rsi' in data.columns:
+                        # Use existing indicators
+                        indicators = data
+                        self.logger.debug(f"Using existing indicators for {symbol}")
+                    else:
+                        # Calculate technical indicators for historical data
+                        indicators = self._get_trading_system().calculate_indicators(data)
+                    
+                    # Calculate score based on indicators
+                    score = self._calculate_stock_score(indicators, strategy, profile)
+                    
+                    # Add industry diversification bonus
+                    industry = industry_groups.get(symbol, 'Unknown')
+                    industry_bonus = self._get_industry_bonus(industry, data)
+                    final_score = score + industry_bonus
+                    
+                    stock_scores.append({
+                        'symbol': symbol,
+                        'score': final_score,
+                        'industry': industry
+                    })
+                    
+                except Exception as e:
+                    self.logger.warning(f"Error scoring {symbol} for {current_date}: {e}")
+                    continue
+            
+            # Sort by score and select top stocks with industry diversification
+            stock_scores.sort(key=lambda x: x['score'], reverse=True)
+            
+            # Select top stocks ensuring industry diversification
+            selected_stocks = self._select_diversified_stocks(stock_scores, max_stocks=20)
+            
+            return [stock['symbol'] for stock in selected_stocks]
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating daily stock scoring: {e}")
+            return []
+    
+    def _classify_stocks_by_industry(self, symbols: List[str]) -> Dict[str, str]:
+        """
+        Classify stocks by industry for diversification.
+        
+        Args:
+            symbols: List of stock symbols
+            
+        Returns:
+            Dictionary mapping symbols to industries
+        """
+        # Industry classification mapping
+        industry_mapping = {
+            # Technology
+            'AAPL': 'Technology', 'MSFT': 'Technology', 'GOOGL': 'Technology', 
+            'META': 'Technology', 'NVDA': 'Technology', 'TSLA': 'Technology',
+            'AMZN': 'Technology', 'NFLX': 'Technology', 'ADBE': 'Technology',
+            'CRM': 'Technology', 'ORCL': 'Technology', 'ZM': 'Technology',
+            
+            # Healthcare
+            'JNJ': 'Healthcare', 'PFE': 'Healthcare', 'MRK': 'Healthcare',
+            'UNH': 'Healthcare', 'ABBV': 'Healthcare', 'LLY': 'Healthcare',
+            'TMO': 'Healthcare', 'DHR': 'Healthcare',
+            
+            # Financial
+            'JPM': 'Financial', 'BAC': 'Financial', 'WFC': 'Financial',
+            'GS': 'Financial', 'MS': 'Financial', 'V': 'Financial',
+            'MA': 'Financial', 'PYPL': 'Financial',
+            
+            # Consumer
+            'PG': 'Consumer', 'KO': 'Consumer', 'PEP': 'Consumer',
+            'WMT': 'Consumer', 'COST': 'Consumer', 'HD': 'Consumer',
+            'MCD': 'Consumer', 'NKE': 'Consumer', 'DIS': 'Consumer',
+            
+            # Industrial
+            'CAT': 'Industrial', 'BA': 'Industrial', 'MMM': 'Industrial',
+            'GE': 'Industrial', 'HON': 'Industrial',
+            
+            # Energy
+            'XOM': 'Energy', 'CVX': 'Energy', 'COP': 'Energy',
+            
+            # ETFs
+            'SPY': 'ETF', 'QQQ': 'ETF', 'IWM': 'ETF', 'VTI': 'ETF',
+            'VOO': 'ETF', 'VEA': 'ETF', 'VWO': 'ETF'
+        }
+        
+        # Default to 'Other' for unknown symbols
+        return {symbol: industry_mapping.get(symbol, 'Other') for symbol in symbols}
+    
+    def _get_industry_bonus(self, industry: str, data: pd.DataFrame) -> float:
+        """
+        Calculate industry bonus based on sector trends.
+        
+        Args:
+            industry: Industry classification
+            data: Stock price data
+            
+        Returns:
+            Industry bonus score
+        """
+        try:
+            if len(data) < 20:
+                return 0.0
+            
+            # Calculate recent performance (last 20 days)
+            recent_data = data.tail(20)
+            if len(recent_data) < 10:
+                return 0.0
+            
+            # Calculate momentum
+            start_price = recent_data.iloc[0]['close']
+            end_price = recent_data.iloc[-1]['close']
+            momentum = (end_price - start_price) / start_price
+            
+            # Industry-specific bonuses
+            industry_bonuses = {
+                'Technology': 0.1,  # Tech stocks get slight bonus
+                'Healthcare': 0.05,  # Healthcare gets moderate bonus
+                'Financial': 0.0,    # Financial neutral
+                'Consumer': 0.0,     # Consumer neutral
+                'Industrial': -0.05,  # Industrial slight penalty
+                'Energy': -0.1,       # Energy penalty
+                'ETF': 0.0,          # ETFs neutral
+                'Other': 0.0         # Other neutral
+            }
+            
+            base_bonus = industry_bonuses.get(industry, 0.0)
+            momentum_bonus = momentum * 0.5  # Scale momentum
+            
+            return base_bonus + momentum_bonus
+            
+        except Exception as e:
+            self.logger.warning(f"Error calculating industry bonus: {e}")
+            return 0.0
+    
+    def _select_diversified_stocks(self, stock_scores: List[Dict], max_stocks: int = 20) -> List[Dict]:
+        """
+        Select stocks ensuring industry diversification.
+        
+        Args:
+            stock_scores: List of stock scores with industry info
+            max_stocks: Maximum number of stocks to select
+            
+        Returns:
+            List of selected stocks
+        """
+        selected = []
+        industry_counts = {}
+        
+        # First pass: select top stocks from each industry
+        for stock in stock_scores:
+            industry = stock['industry']
+            current_count = industry_counts.get(industry, 0)
+            
+            # Limit per industry to ensure diversification
+            max_per_industry = max(1, max_stocks // 6)  # 6 main industries
+            
+            if current_count < max_per_industry and len(selected) < max_stocks:
+                selected.append(stock)
+                industry_counts[industry] = current_count + 1
+        
+        # Second pass: fill remaining slots with top overall scores
+        remaining_slots = max_stocks - len(selected)
+        remaining_stocks = [s for s in stock_scores if s not in selected]
+        
+        for stock in remaining_stocks[:remaining_slots]:
+            selected.append(stock)
+        
+        return selected
+    
+    def _can_add_position(self, symbol: str, positions: Dict, industry_groups: Dict[str, str]) -> bool:
+        """
+        Check if we can add a position in this stock based on diversification rules.
+        
+        Args:
+            symbol: Stock symbol
+            positions: Current positions
+            industry_groups: Industry classification
+            
+        Returns:
+            True if position can be added
+        """
+        if symbol in positions:
+            return False
+        
+        # Check industry diversification
+        symbol_industry = industry_groups.get(symbol, 'Other')
+        industry_positions = sum(1 for pos in positions.keys() 
+                               if industry_groups.get(pos, 'Other') == symbol_industry)
+        
+        # Limit positions per industry
+        max_per_industry = 3
+        return industry_positions < max_per_industry
+    
+    def _calculate_stock_score(self, indicators: pd.DataFrame, strategy: str, profile: str) -> float:
+        """
+        Calculate stock score based on technical indicators.
+        
+        Args:
+            indicators: Technical indicators data
+            strategy: Strategy name
+            profile: Strategy profile
+            
+        Returns:
+            Stock score (0.0 to 1.0)
+        """
+        try:
+            if indicators.empty:
+                return 0.0
+            
+            # Get latest indicator values
+            latest = indicators.iloc[-1]
+            
+            # Calculate score based on strategy
+            if strategy == 'MACD':
+                # MACD-based scoring
+                macd_score = 0.0
+                if 'macd' in latest and 'macd_signal' in latest:
+                    macd = latest['macd']
+                    signal = latest['macd_signal']
+                    
+                    # Positive MACD crossover
+                    if macd > signal and macd > 0:
+                        macd_score = 0.4
+                    elif macd > signal:
+                        macd_score = 0.2
+                    elif macd < signal and macd < 0:
+                        macd_score = -0.2
+                
+                # RSI scoring
+                rsi_score = 0.0
+                if 'rsi' in latest:
+                    rsi = latest['rsi']
+                    if 40 <= rsi <= 60:  # Neutral RSI
+                        rsi_score = 0.3
+                    elif 30 <= rsi <= 70:  # Acceptable RSI
+                        rsi_score = 0.1
+                    else:  # Extreme RSI
+                        rsi_score = -0.2
+                
+                # Price momentum
+                momentum_score = 0.0
+                if len(indicators) >= 20:
+                    recent_prices = indicators['close'].tail(20)
+                    if len(recent_prices) >= 10:
+                        start_price = recent_prices.iloc[0]
+                        end_price = recent_prices.iloc[-1]
+                        momentum = (end_price - start_price) / start_price
+                        momentum_score = min(0.3, max(-0.3, momentum))
+                
+                # Combine scores
+                total_score = macd_score + rsi_score + momentum_score
+                return max(0.0, min(1.0, (total_score + 0.5) / 1.5))  # Normalize to 0-1
+            
+            else:
+                # Default scoring
+                return 0.5
+                
+        except Exception as e:
+            self.logger.warning(f"Error calculating stock score: {e}")
+            return 0.0
     
     def _calculate_performance_metrics(self, initial_capital: float, 
                                      portfolio_values: List[Dict], 

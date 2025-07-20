@@ -349,3 +349,61 @@ class TradingSystem:
     def clear_cache(self, mode: ScoringMode = None):
         """Clear cache for the unified scoring system."""
         self.unified_scorer.clear_cache(mode) 
+    
+    def get_all_stocks(self) -> List[str]:
+        """
+        Get all available stocks from the unified scoring system.
+        
+        Returns:
+            List of all stock symbols
+        """
+        return self.unified_scorer._get_all_stocks()
+    
+    def calculate_indicators(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate technical indicators for the given data.
+        
+        Args:
+            data: Price data with OHLC columns
+            
+        Returns:
+            DataFrame with calculated indicators
+        """
+        if data.empty:
+            return data
+        
+        try:
+            # Calculate indicators using the indicators module
+            indicators_data = data.copy()
+            
+            # Calculate MACD
+            if len(data) >= 26:
+                macd, signal, histogram = self.indicators.calculate_macd(data['close'])
+                indicators_data['macd'] = macd
+                indicators_data['macd_signal'] = signal
+                indicators_data['macd_histogram'] = histogram
+            
+            # Calculate RSI
+            if len(data) >= 14:
+                rsi = self.indicators.calculate_rsi(data['close'])
+                indicators_data['rsi'] = rsi
+            
+            # Calculate EMAs
+            if len(data) >= 12:
+                ema_short = self.indicators.calculate_ema(data['close'], 12)
+                ema_long = self.indicators.calculate_ema(data['close'], 26)
+                indicators_data['ema_12'] = ema_short
+                indicators_data['ema_26'] = ema_long
+            
+            # Calculate Bollinger Bands
+            if len(data) >= 20:
+                bb_upper, bb_middle, bb_lower = self.indicators.calculate_bollinger_bands(data['close'])
+                indicators_data['bb_upper'] = bb_upper
+                indicators_data['bb_middle'] = bb_middle
+                indicators_data['bb_lower'] = bb_lower
+            
+            return indicators_data
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating indicators: {e}")
+            return data 
