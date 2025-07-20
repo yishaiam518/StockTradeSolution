@@ -23,6 +23,11 @@ class MACDStrategy(BaseStrategy):
         # Set the profile
         self.profile = profile
         
+        # Add current position tracking
+        self.current_position = 0
+        self.entry_price = 0.0
+        self.entry_date = None
+        
         # Apply configuration if provided
         if config_dict:
             # Handle profile-based configuration
@@ -272,6 +277,13 @@ class MACDStrategy(BaseStrategy):
             }
         
         return False, {"summary": "No exit signal", "profile": self.profile}
+    
+    def reset(self):
+        """Reset the strategy state."""
+        self.current_position = 0
+        self.entry_price = 0.0
+        self.entry_date = None
+        logger.info(f"Reset {self.name} state")
     
     def get_strategy_description(self) -> str:
         """Get a description of the strategy."""

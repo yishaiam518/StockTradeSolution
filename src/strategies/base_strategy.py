@@ -15,6 +15,11 @@ class BaseStrategy(ABC):
     def __init__(self, name: str = "BaseStrategy"):
         self.name = name
         
+        # Position tracking
+        self.current_position = 0
+        self.entry_price = 0.0
+        self.entry_date = None
+        
         # Default entry conditions
         self.entry_conditions = {
             'min_volume': 1000000,
@@ -186,6 +191,13 @@ class BaseStrategy(ABC):
                 return False
         
         return True
+    
+    def reset(self):
+        """Reset the strategy state."""
+        self.current_position = 0
+        self.entry_price = 0.0
+        self.entry_date = None
+        logger.info(f"Reset {self.name} state")
     
     def get_strategy_description(self) -> str:
         """Get a description of the strategy."""
