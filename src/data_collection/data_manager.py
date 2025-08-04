@@ -92,6 +92,19 @@ class DataCollectionManager:
                 )
             ''')
             
+            # Create technical_indicators table
+            conn.execute('''
+                CREATE TABLE IF NOT EXISTS technical_indicators (
+                    collection_id TEXT,
+                    symbol TEXT,
+                    indicators_data TEXT,
+                    calculated_date TEXT,
+                    last_updated TEXT,
+                    PRIMARY KEY (collection_id, symbol),
+                    FOREIGN KEY (collection_id) REFERENCES collections (collection_id)
+                )
+            ''')
+            
             # Migrate existing collections to add missing columns
             self._migrate_existing_collections()
             
@@ -683,73 +696,180 @@ class DataCollectionManager:
             return []
     
     def get_collection_details(self, collection_id: str) -> Optional[Dict]:
-        """Get detailed information about a collection including update settings."""
+        """Get detailed information about a specific collection."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('''
+                SELECT * FROM collections WHERE collection_id = ?
+            ''', (collection_id,))
+            
+            row = cursor.fetchone()
+            if row:
+                return {
+                    'collection_id': row[0],
+                    'exchange': row[1],
+                    'start_date': row[2],
+                    'end_date': row[3],
+                    'symbols': row[4],
+                    'sectors': row[5],
+                    'market_cap_min': row[6],
+                    'market_cap_max': row[7],
+                    'include_etfs': row[8],
+                    'include_penny_stocks': row[9],
+                    'total_symbols': row[10],
+                    'successful_symbols': row[11],
+                    'failed_count': row[12],
+                    'collection_date': row[13],
+                    'status': row[14],
+                    'last_updated': row[15],
+                    'auto_update': row[16],
+                    'update_interval': row[17],
+                    'last_run': row[18],
+                    'next_run': row[19]
+                }
+        return None
+    
+    def get_collection_symbols(self, collection_id: str) -> List[str]:
+        """Get all symbols for a specific collection."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('''
+                SELECT symbol FROM collection_data WHERE collection_id = ?
+            ''', (collection_id,))
+            
+            symbols = [row[0] for row in cursor.fetchall()]
+            return symbols
+    
+    def get_symbol_data(self, collection_id: str, symbol: str) -> Optional[pd.DataFrame]:
+        """Get data for a specific symbol in a collection."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('''
+                SELECT data FROM collection_data 
+                WHERE collection_id = ? AND symbol = ?
+            ''', (collection_id, symbol))
+            
+            row = cursor.fetchone()
+            if row and row[0]:
+                try:
+                    data = pd.read_json(row[0])
+                    return data
+                except Exception as e:
+                    self.logger.error(f"Error parsing data for {symbol}: {e}")
+                    return None
+        return None
+    
+    def store_symbol_indicators(self, collection_id: str, symbol: str, enhanced_data: pd.DataFrame) -> bool:
+        """Store technical indicators data for a symbol."""
         try:
+            # Convert the enhanced DataFrame to JSON
+            indicators_json = enhanced_data.to_json()
+            
             with sqlite3.connect(self.db_path) as conn:
-                # First check what columns exist
-                cursor = conn.execute("PRAGMA table_info(collections)")
-                columns = [column[1] for column in cursor.fetchall()]
-                
-                # Build query based on available columns
-                if 'last_updated' in columns and 'auto_update' in columns and 'update_interval' in columns and 'last_run' in columns and 'next_run' in columns:
-                    query = '''
-                        SELECT collection_id, exchange, start_date, end_date, total_symbols,
-                               successful_symbols, failed_count, collection_date, status,
-                               last_updated, auto_update, update_interval, last_run, next_run
-                        FROM collections WHERE collection_id = ?
-                    '''
-                elif 'last_updated' in columns and 'auto_update' in columns and 'update_interval' in columns:
-                    query = '''
-                        SELECT collection_id, exchange, start_date, end_date, total_symbols,
-                               successful_symbols, failed_count, collection_date, status,
-                               last_updated, auto_update, update_interval
-                        FROM collections WHERE collection_id = ?
-                    '''
-                elif 'last_updated' in columns and 'auto_update' in columns:
-                    query = '''
-                        SELECT collection_id, exchange, start_date, end_date, total_symbols,
-                               successful_symbols, failed_count, collection_date, status,
-                               last_updated, auto_update
-                        FROM collections WHERE collection_id = ?
-                    '''
-                else:
-                    # Fallback for older collections
-                    query = '''
-                        SELECT collection_id, exchange, start_date, end_date, total_symbols,
-                               successful_symbols, failed_count, collection_date, status
-                        FROM collections WHERE collection_id = ?
-                    '''
-                
-                cursor = conn.execute(query, (collection_id,))
-                row = cursor.fetchone()
-                
-                if row:
-                    result = {
-                        'collection_id': row[0],
-                        'exchange': row[1],
-                        'start_date': row[2],
-                        'end_date': row[3],
-                        'total_symbols': row[4],
-                        'successful_symbols': row[5],
-                        'failed_count': row[6],
-                        'collection_date': row[7],
-                        'status': row[8]
-                    }
-                    
-                    # Add optional fields if they exist
-                    if len(row) > 9 and 'last_updated' in columns:
-                        result['last_updated'] = row[9]
-                    if len(row) > 10 and 'auto_update' in columns:
-                        result['auto_update'] = bool(row[10])
-                    if len(row) > 11 and 'update_interval' in columns:
-                        result['update_interval'] = row[11]
-                    if len(row) > 12 and 'last_run' in columns:
-                        result['last_run'] = row[12]
-                    if len(row) > 13 and 'next_run' in columns:
-                        result['next_run'] = row[13]
-                    
-                    return result
-                return None
+                conn.execute('''
+                    INSERT OR REPLACE INTO technical_indicators 
+                    (collection_id, symbol, indicators_data, calculated_date, last_updated)
+                    VALUES (?, ?, ?, ?, ?)
+                ''', (
+                    collection_id,
+                    symbol,
+                    indicators_json,
+                    datetime.now().isoformat(),
+                    datetime.now().isoformat()
+                ))
+                conn.commit()
+            
+            self.logger.info(f"Stored technical indicators for {symbol} in collection {collection_id}")
+            return True
+            
         except Exception as e:
-            self.logger.error(f"Error getting collection details for {collection_id}: {e}")
-            return None 
+            self.logger.error(f"Error storing indicators for {symbol}: {e}")
+            return False
+    
+    def get_symbol_indicators(self, collection_id: str, symbol: str) -> Optional[pd.DataFrame]:
+        """Get technical indicators data for a symbol."""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute('''
+                SELECT indicators_data FROM technical_indicators 
+                WHERE collection_id = ? AND symbol = ?
+            ''', (collection_id, symbol))
+            
+            row = cursor.fetchone()
+            if row and row[0]:
+                try:
+                    data = pd.read_json(row[0])
+                    return data
+                except Exception as e:
+                    self.logger.error(f"Error parsing indicators for {symbol}: {e}")
+                    return None
+        return None
+    
+    def get_collection_indicators_status(self, collection_id: str) -> Dict:
+        """Get the status of technical indicators for a collection."""
+        with sqlite3.connect(self.db_path) as conn:
+            # Get total symbols in collection
+            cursor = conn.execute('''
+                SELECT COUNT(*) FROM collection_data WHERE collection_id = ?
+            ''', (collection_id,))
+            total_symbols = cursor.fetchone()[0]
+            
+            # Get symbols with indicators
+            cursor = conn.execute('''
+                SELECT COUNT(*) FROM technical_indicators WHERE collection_id = ?
+            ''', (collection_id,))
+            symbols_with_indicators = cursor.fetchone()[0]
+            
+            # Get latest calculation date
+            cursor = conn.execute('''
+                SELECT MAX(calculated_date) FROM technical_indicators WHERE collection_id = ?
+            ''', (collection_id,))
+            latest_calculation = cursor.fetchone()[0]
+            
+            return {
+                'total_symbols': total_symbols,
+                'symbols_with_indicators': symbols_with_indicators,
+                'indicators_coverage': f"{(symbols_with_indicators/total_symbols*100):.1f}%" if total_symbols > 0 else "0%",
+                'latest_calculation': latest_calculation,
+                'indicators_available': symbols_with_indicators > 0
+            }
+    
+    def calculate_collection_indicators(self, collection_id: str) -> Dict:
+        """Manually trigger technical indicator calculation for a collection."""
+        try:
+            from src.indicators import indicator_manager
+            
+            symbols = self.get_collection_symbols(collection_id)
+            if not symbols:
+                return {'success': False, 'error': 'No symbols found for collection'}
+            
+            calculated_count = 0
+            errors = []
+            
+            for symbol in symbols:
+                try:
+                    # Get the symbol data
+                    symbol_data = self.get_symbol_data(collection_id, symbol)
+                    if symbol_data is None or symbol_data.empty:
+                        errors.append(f"No data for {symbol}")
+                        continue
+                    
+                    # Calculate all technical indicators
+                    enhanced_data = indicator_manager.calculate_all_indicators(symbol_data)
+                    
+                    # Store the enhanced data with indicators
+                    if self.store_symbol_indicators(collection_id, symbol, enhanced_data):
+                        calculated_count += 1
+                    else:
+                        errors.append(f"Failed to store indicators for {symbol}")
+                    
+                except Exception as e:
+                    errors.append(f"Error calculating indicators for {symbol}: {e}")
+                    continue
+            
+            return {
+                'success': True,
+                'calculated_count': calculated_count,
+                'total_symbols': len(symbols),
+                'errors': errors,
+                'coverage': f"{(calculated_count/len(symbols)*100):.1f}%" if symbols else "0%"
+            }
+            
+        except Exception as e:
+            return {'success': False, 'error': str(e)} 

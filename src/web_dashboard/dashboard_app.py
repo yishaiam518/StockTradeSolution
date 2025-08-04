@@ -119,6 +119,11 @@ class DashboardApp:
             """Test page for stock viewer JavaScript."""
             return render_template('test_stock_viewer.html')
         
+        @self.app.route('/debug_stock_viewer.js')
+        def debug_stock_viewer_js():
+            """Serve the debug script for stock viewer."""
+            return send_file('debug_stock_viewer.js', mimetype='application/javascript')
+        
         @self.app.route('/api/portfolio')
         def get_portfolio():
             """Get portfolio data."""
@@ -1573,14 +1578,140 @@ class DashboardApp:
                     from ..data_collection.scheduler import DataCollectionScheduler
                     self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
                 
+                intervals = self.data_scheduler.get_available_intervals()
                 return jsonify({
                     'success': True,
-                    'intervals': self.data_scheduler.get_available_intervals()
+                    'intervals': intervals
                 })
-                    
             except Exception as e:
                 self.logger.error(f"Error getting scheduler intervals: {e}")
-                return jsonify({'error': str(e)}), 500
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
+        # Technical Indicators API Endpoints
+        @self.app.route('/api/data-collection/collections/<collection_id>/indicators/calculate', methods=['POST'])
+        def calculate_collection_indicators(collection_id):
+            """Manually trigger technical indicator calculation for a collection."""
+            try:
+                result = self.data_collection_manager.calculate_collection_indicators(collection_id)
+                return jsonify(result)
+            except Exception as e:
+                self.logger.error(f"Error calculating indicators for collection {collection_id}: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/indicators/status', methods=['GET'])
+        def get_collection_indicators_status(collection_id):
+            """Get the status of technical indicators for a collection."""
+            try:
+                status = self.data_collection_manager.get_collection_indicators_status(collection_id)
+                return jsonify({
+                    'success': True,
+                    'collection_id': collection_id,
+                    'status': status
+                })
+            except Exception as e:
+                self.logger.error(f"Error getting indicators status for collection {collection_id}: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/symbols/<symbol>/indicators', methods=['GET'])
+        def get_symbol_indicators(collection_id, symbol):
+            """Get technical indicators data for a specific symbol."""
+            try:
+                indicators_data = self.data_collection_manager.get_symbol_indicators(collection_id, symbol)
+                
+                if indicators_data is None:
+                    return jsonify({
+                        'success': False,
+                        'error': f'No indicators found for symbol {symbol} in collection {collection_id}'
+                    }), 404
+                
+                # Convert DataFrame to JSON for API response
+                indicators_json = indicators_data.to_json(orient='records', date_format='iso')
+                
+                return jsonify({
+                    'success': True,
+                    'collection_id': collection_id,
+                    'symbol': symbol,
+                    'indicators_data': json.loads(indicators_json),
+                    'columns': indicators_data.columns.tolist(),
+                    'shape': indicators_data.shape
+                })
+                
+            except Exception as e:
+                self.logger.error(f"Error getting indicators for symbol {symbol} in collection {collection_id}: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/symbols/<symbol>/data-with-indicators', methods=['GET'])
+        def get_symbol_data_with_indicators(collection_id, symbol):
+            """Get both original data and technical indicators for a symbol."""
+            try:
+                # Get original data
+                original_data = self.data_collection_manager.get_symbol_data(collection_id, symbol)
+                if original_data is None:
+                    return jsonify({
+                        'success': False,
+                        'error': f'No data found for symbol {symbol} in collection {collection_id}'
+                    }), 404
+                
+                # Get indicators data
+                indicators_data = self.data_collection_manager.get_symbol_indicators(collection_id, symbol)
+                
+                # Combine data if indicators exist
+                if indicators_data is not None:
+                    # Start with the indicators data (which contains both original and indicators)
+                    combined_data = indicators_data.copy()
+                    
+                    # Ensure we have the original column names for compatibility
+                    column_mapping = {
+                        'open': 'Open',
+                        'high': 'High', 
+                        'low': 'Low',
+                        'close': 'Close',
+                        'volume': 'Volume'
+                    }
+                    
+                    # Rename columns if needed
+                    for old_col, new_col in column_mapping.items():
+                        if old_col in combined_data.columns and new_col not in combined_data.columns:
+                            combined_data[new_col] = combined_data[old_col]
+                    
+                    # Ensure Date column is present
+                    if 'Date' not in combined_data.columns and 'date' in combined_data.columns:
+                        combined_data['Date'] = combined_data['date']
+                    
+                else:
+                    combined_data = original_data
+                
+                # Convert to JSON for API response
+                data_json = combined_data.to_json(orient='records', date_format='iso')
+                
+                return jsonify({
+                    'success': True,
+                    'collection_id': collection_id,
+                    'symbol': symbol,
+                    'data': json.loads(data_json),
+                    'columns': combined_data.columns.tolist(),
+                    'shape': combined_data.shape,
+                    'indicators_available': indicators_data is not None
+                })
+                
+            except Exception as e:
+                self.logger.error(f"Error getting data with indicators for symbol {symbol} in collection {collection_id}: {e}")
+                return jsonify({
+                    'success': False,
+                    'error': str(e)
+                }), 500
     
     def _run_simplified_historical_backtest(self, strategy, profile, start_date, end_date, benchmark):
         """Run a simplified historical backtest using the same logic as the test script."""

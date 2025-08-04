@@ -112,6 +112,23 @@ class IndicatorManager:
         """
         result_data = data.copy()
         
+        # Normalize column names first
+        if hasattr(result_data, '_normalize_column_names'):
+            result_data = result_data._normalize_column_names(result_data)
+        else:
+            # Create a mapping for column name normalization
+            column_mapping = {}
+            for col in result_data.columns:
+                col_lower = col.lower()
+                if col_lower in ['open', 'high', 'low', 'close', 'volume']:
+                    column_mapping[col] = col_lower
+            
+            # Only rename if we have mappings
+            if column_mapping:
+                result_data = result_data.rename(columns=column_mapping)
+                from src.utils.logger import logger
+                logger.debug(f"Normalized column names: {column_mapping}")
+        
         for name, indicator in self.indicators.items():
             if name != 'legacy':  # Skip legacy indicator
                 try:

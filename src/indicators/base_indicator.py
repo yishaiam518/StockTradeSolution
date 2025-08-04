@@ -60,6 +60,7 @@ class BaseIndicator(ABC):
     def validate_data(self, data: pd.DataFrame) -> bool:
         """
         Validate that the input data has required columns.
+        Handles different column name formats (capitalized vs lowercase).
         
         Args:
             data: DataFrame to validate
@@ -67,11 +68,24 @@ class BaseIndicator(ABC):
         Returns:
             True if data is valid, False otherwise
         """
-        required_columns = ['open', 'high', 'low', 'close', 'volume']
-        missing_columns = [col for col in required_columns if col not in data.columns]
+        # Define possible column name mappings
+        column_mappings = {
+            'open': ['open', 'Open', 'OPEN'],
+            'high': ['high', 'High', 'HIGH'],
+            'low': ['low', 'Low', 'LOW'],
+            'close': ['close', 'Close', 'CLOSE'],
+            'volume': ['volume', 'Volume', 'VOLUME']
+        }
+        
+        # Check if we have the required columns in any format
+        missing_columns = []
+        for required_col, possible_names in column_mappings.items():
+            if not any(name in data.columns for name in possible_names):
+                missing_columns.append(required_col)
         
         if missing_columns:
             logger.error(f"Missing required columns for {self.name}: {missing_columns}")
+            logger.error(f"Available columns: {list(data.columns)}")
             return False
         
         if data.empty:
@@ -79,6 +93,30 @@ class BaseIndicator(ABC):
             return False
         
         return True
+    
+    def _normalize_column_names(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Normalize column names to lowercase for consistent processing.
+        
+        Args:
+            data: DataFrame with potentially mixed case column names
+            
+        Returns:
+            DataFrame with normalized column names
+        """
+        # Create a mapping for column name normalization
+        column_mapping = {}
+        for col in data.columns:
+            col_lower = col.lower()
+            if col_lower in ['open', 'high', 'low', 'close', 'volume']:
+                column_mapping[col] = col_lower
+        
+        # Only rename if we have mappings
+        if column_mapping:
+            data = data.rename(columns=column_mapping)
+            logger.debug(f"Normalized column names: {column_mapping}")
+        
+        return data
     
     def set_parameters(self, parameters: Dict[str, Any]) -> None:
         """

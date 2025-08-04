@@ -379,21 +379,31 @@ class StockViewer {
         this.showLoading(true);
         
         try {
-            console.log('Fetching data for symbol:', selectedSymbol);
-            const response = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${selectedSymbol}`);
-            const data = await response.json();
+            console.log('Fetching data with indicators for symbol:', selectedSymbol);
+            // Try to get data with indicators first
+            let response = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${selectedSymbol}/data-with-indicators`);
+            let data = await response.json();
+            
+            // If no indicators available, fall back to regular data
+            if (!data.success || !data.indicators_available) {
+                console.log('No indicators available, fetching regular data');
+                response = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${selectedSymbol}`);
+                data = await response.json();
+            }
             
             console.log('Stock data response:', data);
             console.log('Response status:', response.status);
             console.log('Data keys:', Object.keys(data));
             
-            if (data.success && data.stock_data && data.stock_data.length > 0) {
-                console.log('Data points received:', data.stock_data.length);
-                this.displayStockInfo(selectedSymbol, data.stock_data);
-                this.createStockChart(data.stock_data);
+            if (data.success && data.data && data.data.length > 0) {
+                console.log('Data points received:', data.data.length);
+                console.log('Available columns:', data.columns);
+                this.displayStockInfo(selectedSymbol, data.data);
+                this.createStockChart(data.data);
+                this.displayTechnicalIndicators(data.data, data.columns);
             } else {
                 console.error('Failed to load stock data:', data);
-                if (data.stock_data && data.stock_data.length === 0) {
+                if (data.data && data.data.length === 0) {
                     this.showError('No data available for this symbol');
                 } else {
                     this.showError('Failed to load stock data: ' + (data.error || 'Unknown error'));
@@ -405,6 +415,136 @@ class StockViewer {
         } finally {
             this.showLoading(false);
         }
+    }
+    
+    displayTechnicalIndicators(stockData, columns) {
+        console.log('🔍 displayTechnicalIndicators called');
+        console.log('Stock data length:', stockData.length);
+        console.log('Available columns:', columns);
+        
+        const indicatorsContainer = document.getElementById('technicalIndicators');
+        if (!indicatorsContainer) {
+            console.log('Technical indicators container not found');
+            return;
+        }
+        
+        // Define indicator categories with actual column names from API
+        const indicatorCategories = {
+            'Moving Averages': ['sma_20', 'ema_20', 'wma_20', 'hma_20'],
+            'Momentum': ['rsi_14', 'macd_line_12_26', 'macd_signal_12_26_9', 'macd_histogram_12_26_9', 'stoch_k_14', 'stoch_d_14_3', 'williams_r_14'],
+            'Volatility': ['bb_upper_20_2.0', 'bb_lower_20_2.0', 'bb_middle_20_2.0', 'atr_14', 'std_dev_20'],
+            'Volume': ['obv', 'obv_ma_20', 'obv_roc']
+        };
+        
+        // Get the latest data point
+        const latest = stockData[stockData.length - 1];
+        
+        let indicatorsHTML = '<div class="row">';
+        
+        // Display indicators by category
+        Object.entries(indicatorCategories).forEach(([category, indicators]) => {
+            const availableIndicators = indicators.filter(indicator => 
+                columns.includes(indicator) && latest[indicator] !== undefined && !isNaN(latest[indicator])
+            );
+            
+            if (availableIndicators.length > 0) {
+                indicatorsHTML += `
+                    <div class="col-md-6 mb-3">
+                        <div class="card">
+                            <div class="card-header">
+                                <h6 class="mb-0">${category}</h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                `;
+                
+                availableIndicators.forEach(indicator => {
+                    const value = latest[indicator];
+                    const formattedValue = this.formatIndicatorValue(indicator, value);
+                    const colorClass = this.getIndicatorColorClass(indicator, value);
+                    
+                    indicatorsHTML += `
+                        <div class="col-6 mb-2">
+                            <div class="indicator-item">
+                                <div class="indicator-label">${this.formatIndicatorName(indicator)}</div>
+                                <div class="indicator-value ${colorClass}">${formattedValue}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                indicatorsHTML += `
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        });
+        
+        indicatorsHTML += '</div>';
+        
+        if (indicatorsHTML === '<div class="row"></div>') {
+            indicatorsHTML = `
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i> No technical indicators available for this symbol. 
+                    <a href="/data-collection" class="alert-link">Calculate indicators</a> in the data collection dashboard.
+                </div>
+            `;
+        }
+        
+        indicatorsContainer.innerHTML = indicatorsHTML;
+        indicatorsContainer.style.display = 'block';
+    }
+    
+    formatIndicatorName(indicator) {
+        const nameMap = {
+            'sma_20': 'SMA (20)',
+            'ema_20': 'EMA (20)',
+            'wma_20': 'WMA (20)',
+            'hma_20': 'HMA (20)',
+            'rsi_14': 'RSI (14)',
+            'macd_line_12_26': 'MACD',
+            'macd_signal_12_26_9': 'MACD Signal',
+            'macd_histogram_12_26_9': 'MACD Hist',
+            'stoch_k_14': 'Stoch %K',
+            'stoch_d_14_3': 'Stoch %D',
+            'williams_r_14': 'Williams %R',
+            'bb_upper_20_2.0': 'BB Upper',
+            'bb_lower_20_2.0': 'BB Lower',
+            'bb_middle_20_2.0': 'BB Middle',
+            'atr_14': 'ATR (14)',
+            'std_dev_20': 'Std Dev',
+            'obv': 'OBV',
+            'obv_ma_20': 'OBV MA',
+            'obv_roc': 'OBV ROC'
+        };
+        return nameMap[indicator] || indicator;
+    }
+    
+    formatIndicatorValue(indicator, value) {
+        if (indicator.includes('rsi') || indicator.includes('stoch') || indicator.includes('williams')) {
+            return value.toFixed(2);
+        } else if (indicator.includes('macd') || indicator.includes('atr') || indicator.includes('std')) {
+            return value.toFixed(4);
+        } else {
+            return value.toFixed(2);
+        }
+    }
+    
+    getIndicatorColorClass(indicator, value) {
+        if (indicator.includes('rsi')) {
+            if (value > 70) return 'text-danger';
+            if (value < 30) return 'text-success';
+            return 'text-warning';
+        } else if (indicator.includes('stoch') || indicator.includes('williams')) {
+            if (value > 80) return 'text-danger';
+            if (value < 20) return 'text-success';
+            return 'text-warning';
+        } else if (indicator.includes('macd')) {
+            return value >= 0 ? 'text-success' : 'text-danger';
+        }
+        return '';
     }
 
     displayStockInfo(symbol, stockData) {

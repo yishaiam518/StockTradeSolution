@@ -46,6 +46,12 @@ function stopCollectionScheduler(collectionId) {
     }
 }
 
+function calculateCollectionIndicators(collectionId) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.calculateCollectionIndicators(collectionId);
+    }
+}
+
 class DataCollectionManager {
     constructor() {
         this.initializeEventListeners();
@@ -226,14 +232,24 @@ class DataCollectionManager {
                                     <div class="d-flex flex-column">
                                         <div class="small text-muted">
                                             <span id="last-run-${collection.collection_id}">Last: ${collection.last_run ? new Date(collection.last_run).toLocaleString() : 'Never'}</span> | 
-                                            <span id="next-run-${collection.collection_id}">Next: ${collection.auto_update ? (collection.next_run ? new Date(collection.next_run).toLocaleString() : 'Not scheduled') : 'Not scheduled'}</span>
-                                        </div>
-
-                                        <div class="small text-muted">
-                                            <span class="text-success">✓ ${collection.successful_symbols || 0} successful</span> | 
-                                            <span class="text-danger">✗ ${collection.failed_count || 0} failed</span>
+                                            <span id="next-run-${collection.collection_id}">Next: ${collection.next_run ? new Date(collection.next_run).toLocaleString() : 'Not scheduled'}</span>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Technical Indicators Section -->
+                        <div class="technical-indicators mt-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label small text-muted mb-0">Technical Indicators:</label>
+                                <button type="button" class="btn btn-outline-primary btn-sm" onclick="window.dataCollectionManager.calculateCollectionIndicators('${collection.collection_id}')">
+                                    <i class="fas fa-calculator"></i> Calculate
+                                </button>
+                            </div>
+                            <div id="indicators-status-${collection.collection_id}" class="indicators-status">
+                                <div class="indicators-info">
+                                    <span class="badge bg-secondary">Loading...</span>
                                 </div>
                             </div>
                         </div>
@@ -242,6 +258,9 @@ class DataCollectionManager {
             `;
             
             row.appendChild(card);
+            
+            // Load indicators status for this collection
+            this.loadCollectionIndicatorsStatus(collection.collection_id);
         });
     }
 
@@ -1032,19 +1051,88 @@ class DataCollectionManager {
                 }
             });
             
-            const data = await response.json();
-            
-            if (data.success) {
-                this.showAlert(`Scheduler stopped for collection ${collectionId}`, 'success');
-                document.getElementById(`start-${collectionId}`).style.display = 'inline-block';
-                document.getElementById(`stop-scheduler-${collectionId}`).style.display = 'none';
-                document.getElementById(`status-${collectionId}`).textContent = 'Stopped';
+            const result = await response.json();
+            if (result.success) {
+                this.updateSchedulerStatus(collectionId, false);
+                this.showAlert('Scheduler stopped successfully', 'success');
             } else {
-                this.showAlert('Error stopping scheduler: ' + data.error, 'danger');
+                this.showAlert(`Error stopping scheduler: ${result.error}`, 'danger');
             }
         } catch (error) {
-            console.error('Error stopping collection scheduler:', error);
-            this.showAlert('Error stopping collection scheduler', 'danger');
+            console.error('Error stopping scheduler:', error);
+            this.showAlert('Error stopping scheduler', 'danger');
+        }
+    }
+    
+    // Technical Indicators Methods
+    async calculateCollectionIndicators(collectionId) {
+        try {
+            this.showAlert('Calculating technical indicators...', 'info');
+            
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/indicators/calculate`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                this.showAlert(`Technical indicators calculated successfully! ${result.calculated_count}/${result.total_symbols} symbols processed (${result.coverage} coverage)`, 'success');
+                // Refresh the collections display to show updated indicator status
+                this.loadCollections();
+            } else {
+                this.showAlert(`Error calculating indicators: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Error calculating indicators:', error);
+            this.showAlert('Error calculating technical indicators', 'danger');
+        }
+    }
+    
+    async getCollectionIndicatorsStatus(collectionId) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/indicators/status`);
+            const result = await response.json();
+            
+            if (result.success) {
+                return result.status;
+            } else {
+                console.error('Error getting indicators status:', result.error);
+                return null;
+            }
+        } catch (error) {
+            console.error('Error getting indicators status:', error);
+            return null;
+        }
+    }
+    
+    async loadCollectionIndicatorsStatus(collectionId) {
+        const status = await this.getCollectionIndicatorsStatus(collectionId);
+        if (status) {
+            this.updateIndicatorsStatus(collectionId, status);
+        }
+    }
+    
+    updateIndicatorsStatus(collectionId, status) {
+        const statusElement = document.getElementById(`indicators-status-${collectionId}`);
+        if (statusElement) {
+            if (status.indicators_available) {
+                statusElement.innerHTML = `
+                    <div class="indicators-info">
+                        <span class="badge bg-success">✓ Indicators Available</span>
+                        <small class="text-muted">${status.symbols_with_indicators}/${status.total_symbols} symbols (${status.indicators_coverage})</small>
+                        <br><small class="text-muted">Last calculated: ${new Date(status.latest_calculation).toLocaleString()}</small>
+                    </div>
+                `;
+            } else {
+                statusElement.innerHTML = `
+                    <div class="indicators-info">
+                        <span class="badge bg-warning">⚠ No Indicators</span>
+                        <small class="text-muted">Technical indicators not calculated yet</small>
+                    </div>
+                `;
+            }
         }
     }
 
@@ -1188,6 +1276,7 @@ class DataCollectionManager {
 // Make functions globally available
 window.startScheduler = (collectionId) => window.dataCollectionManager.startScheduler(collectionId);
 window.stopScheduler = (collectionId) => window.dataCollectionManager.stopScheduler(collectionId);
+window.calculateCollectionIndicators = (collectionId) => window.dataCollectionManager.calculateCollectionIndicators(collectionId);
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {

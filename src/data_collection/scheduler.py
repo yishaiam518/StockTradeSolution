@@ -141,7 +141,7 @@ class CollectionScheduler:
             self.next_run = next_run
     
     def _update_collection(self):
-        """Update this specific collection."""
+        """Update this specific collection and calculate technical indicators."""
         try:
             self.logger.info(f"Running scheduled update for collection {self.collection_id}")
             self.last_run = datetime.now()
@@ -150,11 +150,16 @@ class CollectionScheduler:
             
             if result.get('success'):
                 self.logger.info(f"Collection {self.collection_id} updated successfully: {result.get('updated_symbols', 0)} symbols updated")
+                
+                # Calculate technical indicators for all symbols in this collection
+                self._calculate_technical_indicators()
+                
                 # Store result for status reporting
                 self.last_result = {
                     'success': True,
                     'updated_symbols': result.get('updated_symbols', 0),
                     'failed_symbols': result.get('failed_symbols', 0),
+                    'indicators_calculated': True,
                     'timestamp': self.last_run.isoformat()
                 }
             else:
@@ -178,6 +183,51 @@ class CollectionScheduler:
             }
             # Still update database times even if update failed
             self._update_database_times()
+    
+    def _calculate_technical_indicators(self):
+        """Calculate technical indicators for all symbols in this collection."""
+        try:
+            from src.indicators import indicator_manager
+            
+            # Get all symbols for this collection
+            collection_details = self.data_manager.get_collection_details(self.collection_id)
+            if not collection_details:
+                self.logger.error(f"Could not get collection details for {self.collection_id}")
+                return
+            
+            # Get symbols from the collection
+            symbols = self.data_manager.get_collection_symbols(self.collection_id)
+            if not symbols:
+                self.logger.warning(f"No symbols found for collection {self.collection_id}")
+                return
+            
+            self.logger.info(f"Calculating technical indicators for {len(symbols)} symbols in collection {self.collection_id}")
+            
+            calculated_count = 0
+            for symbol in symbols:
+                try:
+                    # Get the symbol data
+                    symbol_data = self.data_manager.get_symbol_data(self.collection_id, symbol)
+                    if symbol_data is None or symbol_data.empty:
+                        self.logger.warning(f"No data found for symbol {symbol} in collection {self.collection_id}")
+                        continue
+                    
+                    # Calculate all technical indicators
+                    enhanced_data = indicator_manager.calculate_all_indicators(symbol_data)
+                    
+                    # Store the enhanced data with indicators
+                    self.data_manager.store_symbol_indicators(self.collection_id, symbol, enhanced_data)
+                    
+                    calculated_count += 1
+                    
+                except Exception as e:
+                    self.logger.error(f"Error calculating indicators for symbol {symbol}: {e}")
+                    continue
+            
+            self.logger.info(f"Successfully calculated technical indicators for {calculated_count}/{len(symbols)} symbols in collection {self.collection_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in technical indicator calculation for collection {self.collection_id}: {e}")
     
     def _update_database_times(self):
         """Update the database with current last_run and next_run times."""
