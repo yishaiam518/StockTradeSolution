@@ -567,8 +567,9 @@ class StockViewer {
                     format: 'Date: ${point.x}<br/>Price: $${point.y}',
                     header: 'Stock Data',
                     shared: true,
-                    fill: '#ffffff',
-                    border: { color: '#0066FF', width: 1 }
+                    fill: '#000000',
+                    border: { color: '#0066FF', width: 1 },
+                    textStyle: { color: '#ffffff' }
                 },
                 series: [{
                     dataSource: chartData,
