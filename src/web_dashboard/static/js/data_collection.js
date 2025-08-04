@@ -182,6 +182,21 @@ class DataCollectionManager {
                             Last update: ${collection.last_updated || 'Never'}
                         </p>
                         
+                        <!-- Action Buttons -->
+                        <div class="action-buttons mt-3 mb-3">
+                            <div class="btn-group w-100" role="group">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="viewCollection('${collection.collection_id}')">
+                                    <i class="fas fa-chart-line"></i> View Data
+                                </button>
+                                <button type="button" class="btn btn-info btn-sm" onclick="updateCollection('${collection.collection_id}')">
+                                    <i class="fas fa-sync"></i> Update
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="deleteCollection('${collection.collection_id}')">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+
                         <!-- Scheduler Controls -->
                         <div class="scheduler-controls mt-3">
                             <!-- Row 1: Time Interval Selection (Full Width) -->
