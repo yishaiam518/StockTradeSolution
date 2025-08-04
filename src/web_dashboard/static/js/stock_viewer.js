@@ -545,7 +545,8 @@ class StockViewer {
                 },
                 tooltip: {
                     enable: true,
-                    format: '${point.x} : $${point.y}'
+                    format: 'Date: ${point.x}<br/>Price: $${point.y}',
+                    header: 'Stock Data'
                 },
                 series: [{
                     dataSource: chartData,
@@ -612,7 +613,8 @@ class StockViewer {
             },
             tooltip: {
                 enable: true,
-                format: '${point.x} : O:${point.open} H:${point.high} L:${point.low} C:${point.close}'
+                format: 'Date: ${point.x}<br/>Open: $${point.open}<br/>High: $${point.high}<br/>Low: $${point.low}<br/>Close: $${point.close}',
+                header: 'Candlestick Data'
             },
             series: [{
                 dataSource: chartData,
@@ -675,7 +677,8 @@ class StockViewer {
             },
             tooltip: {
                 enable: true,
-                format: '${point.x} : O:${point.open} H:${point.high} L:${point.low} C:${point.close}'
+                format: 'Date: ${point.x}<br/>Open: $${point.open}<br/>High: $${point.high}<br/>Low: $${point.low}<br/>Close: $${point.close}',
+                header: 'OHLC Data'
             },
             series: [{
                 dataSource: chartData,
@@ -727,7 +730,8 @@ class StockViewer {
             },
             tooltip: {
                 enable: true,
-                format: '${point.x} : Volume: ${point.y}'
+                format: 'Date: ${point.x}<br/>Volume: ${point.y}',
+                header: 'Volume Data'
             },
             series: [{
                 dataSource: chartData,
@@ -785,7 +789,8 @@ class StockViewer {
             },
             tooltip: {
                 enable: true,
-                format: '${point.x} : Price: $${point.y}'
+                format: 'Date: ${point.x}<br/>Price: $${point.y}',
+                header: 'Combined Data'
             },
             series: [
                 {
