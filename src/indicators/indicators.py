@@ -43,9 +43,17 @@ class TechnicalIndicators:
         df = self.calculate_ema(df)
         df = self.calculate_bollinger_bands(df)
         df = self.calculate_volume_ma(df)
+        # Temporarily disable new indicators for testing
+        # df = self.calculate_atr(df)
+        # df = self.calculate_adx(df)
         
-        # Remove any rows with NaN values (usually at the beginning)
-        df = df.dropna()
+        # Only remove rows with NaN values if we have enough data
+        # For short datasets, keep rows even with some NaN values
+        if len(df) > 50:
+            df = df.dropna()
+        else:
+            # For short datasets, only remove rows that are completely NaN
+            df = df.dropna(how='all')
         
         logger.info(f"Calculated indicators for {len(df)} data points")
         return df
@@ -244,6 +252,103 @@ class TechnicalIndicators:
             
         except Exception as e:
             logger.error(f"Error calculating Volume MA: {str(e)}")
+        
+        return data
+    
+    def calculate_atr(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate Average True Range (ATR).
+        
+        Args:
+            data: DataFrame with OHLCV data
+            
+        Returns:
+            DataFrame with ATR column added
+        """
+        try:
+            period = 14  # Standard ATR period
+            
+            # Calculate True Range
+            high_low = data['high'] - data['low']
+            high_close_prev = abs(data['high'] - data['close'].shift(1))
+            low_close_prev = abs(data['low'] - data['close'].shift(1))
+            
+            true_range = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
+            
+            # Calculate ATR
+            atr = true_range.rolling(window=period).mean()
+            
+            # Add to dataframe
+            data['atr'] = atr
+            data['atr_percent'] = (atr / data['close']) * 100  # ATR as percentage of price
+            
+            # Volatility signals
+            data['high_volatility'] = data['atr_percent'] > 3.0  # High volatility > 3%
+            data['low_volatility'] = data['atr_percent'] < 1.0   # Low volatility < 1%
+            data['normal_volatility'] = (data['atr_percent'] >= 1.0) & (data['atr_percent'] <= 3.0)
+            
+            logger.debug(f"ATR calculated with period: {period}")
+            
+        except Exception as e:
+            logger.error(f"Error calculating ATR: {str(e)}")
+        
+        return data
+    
+    def calculate_adx(self, data: pd.DataFrame) -> pd.DataFrame:
+        """
+        Calculate Average Directional Index (ADX).
+        
+        Args:
+            data: DataFrame with OHLCV data
+            
+        Returns:
+            DataFrame with ADX columns added
+        """
+        try:
+            period = 14  # Standard ADX period
+            
+            # Calculate +DM and -DM
+            high_diff = data['high'] - data['high'].shift(1)
+            low_diff = data['low'].shift(1) - data['low']
+            
+            plus_dm = np.where((high_diff > low_diff) & (high_diff > 0), high_diff, 0)
+            minus_dm = np.where((low_diff > high_diff) & (low_diff > 0), low_diff, 0)
+            
+            # Calculate True Range (reuse from ATR)
+            high_low = data['high'] - data['low']
+            high_close_prev = abs(data['high'] - data['close'].shift(1))
+            low_close_prev = abs(data['low'] - data['close'].shift(1))
+            true_range = pd.concat([high_low, high_close_prev, low_close_prev], axis=1).max(axis=1)
+            
+            # Smooth the values
+            tr_smooth = true_range.rolling(window=period).mean()
+            plus_di_smooth = pd.Series(plus_dm).rolling(window=period).mean()
+            minus_di_smooth = pd.Series(minus_dm).rolling(window=period).mean()
+            
+            # Calculate +DI and -DI
+            plus_di = (plus_di_smooth / tr_smooth) * 100
+            minus_di = (minus_di_smooth / tr_smooth) * 100
+            
+            # Calculate DX
+            dx = abs(plus_di - minus_di) / (plus_di + minus_di) * 100
+            
+            # Calculate ADX
+            adx = dx.rolling(window=period).mean()
+            
+            # Add to dataframe
+            data['adx'] = adx
+            data['plus_di'] = plus_di
+            data['minus_di'] = minus_di
+            
+            # Trend strength signals
+            data['strong_trend'] = adx > 25  # Strong trend > 25
+            data['weak_trend'] = adx < 20    # Weak trend < 20
+            data['trend_changing'] = (adx >= 20) & (adx <= 25)  # Trend changing zone
+            
+            logger.debug(f"ADX calculated with period: {period}")
+            
+        except Exception as e:
+            logger.error(f"Error calculating ADX: {str(e)}")
         
         return data
     

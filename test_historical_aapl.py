@@ -46,12 +46,11 @@ def test_historical_aapl():
     
     # Run backtest using trading system
     backtest_engine = BacktestEngine()
-    results = backtest_engine.run_backtest(
-        symbol=symbol,
-        strategy_name=strategy_name,
+    results = backtest_engine.run_historical_backtest(
+        strategy=strategy_name,
+        profile='moderate',
         start_date=start_date,
         end_date=end_date,
-        custom_parameters={},
         benchmark=benchmark
     )
     

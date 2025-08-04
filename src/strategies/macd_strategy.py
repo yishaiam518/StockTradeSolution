@@ -183,7 +183,7 @@ class MACDStrategy(BaseStrategy):
             rsi_neutral = bool(current_row.get('rsi_neutral', False))
             volume_above_ma = bool(current_row.get('volume_above_ma', False))
             
-            # More aggressive entry conditions for testing
+            # More conservative entry conditions to prevent immediate exits
             entry_conditions = [
                 macd_crossover_up,  # Primary MACD signal
                 price_above_ema_short,  # Price above short EMA
@@ -193,13 +193,23 @@ class MACDStrategy(BaseStrategy):
                 volume_above_ma        # Volume is above average
             ]
             
-            # For testing: require at least 3 out of 6 conditions to be true
+            # Require at least 5 out of 6 conditions to be true (VERY STRICT - only high-quality entries)
             conditions_met = sum(entry_conditions)
-            should_enter = conditions_met >= 3
+            should_enter = conditions_met >= 5
             
             # Debug logging
+            logger.info(f"MACD Strategy Entry Check:")
+            logger.info(f"  macd_crossover_up: {macd_crossover_up}")
+            logger.info(f"  price_above_ema_short: {price_above_ema_short}")
+            logger.info(f"  price_above_ema_long: {price_above_ema_long}")
+            logger.info(f"  ema_bullish: {ema_bullish}")
+            logger.info(f"  rsi_neutral: {rsi_neutral}")
+            logger.info(f"  volume_above_ma: {volume_above_ma}")
+            logger.info(f"  conditions_met: {conditions_met}/6")
+            logger.info(f"  should_enter: {should_enter}")
+            
             entry_reason = {
-                'entry_reason': f'MACD Strategy - {conditions_met}/6 conditions met',
+                'entry_reason': f'MACD Strategy - {conditions_met}/6 conditions met (STRICT ENTRY)',
                 'conditions': {
                     'macd_crossover_up': macd_crossover_up,
                     'price_above_ema_short': price_above_ema_short,
@@ -209,109 +219,146 @@ class MACDStrategy(BaseStrategy):
                     'volume_above_ma': volume_above_ma
                 },
                 'conditions_met': conditions_met,
-                'threshold': 3
+                'threshold': 5
             }
             
             return should_enter, entry_reason
             
         except Exception as e:
+            logger.error(f"Error in MACD entry signal: {e}")
             return False, {'summary': f'Error in entry signal: {e}'}
     
-    def should_exit(self, data: pd.DataFrame, current_index: int, entry_price: float, entry_date) -> Tuple[bool, Dict[str, Any]]:
+    def should_exit(self, data: pd.DataFrame, current_index: int, entry_price: float, entry_date: str) -> Tuple[bool, Dict[str, Any]]:
         """
-        Determine if we should exit the position.
-        Implements drawdown protection and take profit as explicit exit signals.
+        Exit signal: Check for exit conditions with P&L tracking
         """
         if current_index < 1:
-            return False, {"summary": "Not enough data"}
+            return False, {'summary': 'Insufficient data'}
         
-        current_row = data.iloc[current_index]
-        previous_row = data.iloc[current_index - 1]
-        
-        # Get current price
-        current_price = current_row['close']
-        
-        # Calculate drawdown from entry
-        drawdown_from_entry = (current_price - entry_price) / entry_price
-        
-        # Find the highest price since entry
-        if 'date' in data.columns:
-            # Find the first row where the date matches entry_date
-            entry_index = data.index[data['date'] == entry_date]
-            if len(entry_index) > 0:
-                entry_index = entry_index[0]
-            else:
-                entry_index = current_index
-        else:
-            entry_index = current_index
-        price_since_entry = data.iloc[entry_index:current_index + 1]['close']
-        highest_price = price_since_entry.max()
-        drawdown_from_peak = (current_price - highest_price) / highest_price
-        
-        # Configurable thresholds
-        max_drawdown = self.exit_conditions.get('max_drawdown_pct', 5.0) / 100
-        take_profit_pct = self.exit_conditions.get('take_profit_pct', 10.0) / 100
-        stop_loss_pct = self.exit_conditions.get('stop_loss_pct', 3.0) / 100
-        max_hold_days = self.exit_conditions.get('max_hold_days', 252)
-        
-        # 1. Drawdown protection: sell if price drops X% from peak since entry
-        if drawdown_from_peak < -max_drawdown:
-            return True, {
-                "summary": f"Drawdown protection: {drawdown_from_peak*100:.2f}% from peak (threshold {max_drawdown*100:.2f}%)",
-                "profile": self.profile,
-                "drawdown_from_peak": drawdown_from_peak*100,
-                "threshold": max_drawdown*100,
-                "exit_type": "drawdown_protection"
+        try:
+            current_row = data.iloc[current_index]
+            current_price = current_row.get('close', 0)
+            
+            # Calculate P&L
+            pnl_pct = ((current_price - entry_price) / entry_price) * 100 if entry_price > 0 else 0
+            
+            # Calculate days held
+            try:
+                from datetime import datetime
+                entry_dt = datetime.strptime(entry_date, '%Y-%m-%d')
+                
+                # Handle different index types (string, datetime, etc.)
+                current_date = data.index[current_index]
+                
+                if isinstance(current_date, str):
+                    current_dt = datetime.strptime(current_date, '%Y-%m-%d')
+                elif hasattr(current_date, 'strftime'):
+                    # It's already a datetime object
+                    current_dt = current_date
+                else:
+                    # Try to convert to string first
+                    current_dt = datetime.strptime(str(current_date), '%Y-%m-%d')
+                
+                days_held = (current_dt - entry_dt).days
+            except Exception as e:
+                # Log the error for debugging
+                print(f"Error calculating days_held: {e}")
+                print(f"entry_date: {entry_date}, current_date: {data.index[current_index]}")
+                days_held = 0
+            
+            # Get exit thresholds - tight stop-loss, moderate take-profit
+            take_profit_pct = self.exit_conditions.get('take_profit_pct', 7.0)   # Moderate profit-taking
+            stop_loss_pct = self.exit_conditions.get('stop_loss_pct', 3.0)       # Tight stop-loss to cut losses quickly
+            max_hold_days = self.exit_conditions.get('max_hold_days', 45)        # Shorter max hold
+            max_drawdown_pct = self.exit_conditions.get('max_drawdown_pct', 6.0) # Tighter drawdown control
+            
+            # Check take profit
+            if pnl_pct >= take_profit_pct:
+                return True, {
+                    'summary': f'Take profit triggered ({pnl_pct:.2f}%)',
+                    'exit_type': 'take_profit',
+                    'pnl_pct': pnl_pct,
+                    'days_held': days_held
+                }
+            
+            # Check stop loss
+            if pnl_pct <= -stop_loss_pct:
+                return True, {
+                    'summary': f'Stop loss triggered ({pnl_pct:.2f}%)',
+                    'exit_type': 'stop_loss',
+                    'pnl_pct': pnl_pct,
+                    'days_held': days_held
+                }
+            
+            # Check max hold days
+            if days_held >= max_hold_days:
+                return True, {
+                    'summary': f'Max hold days reached ({days_held} days)',
+                    'exit_type': 'time_exit',
+                    'pnl_pct': pnl_pct,
+                    'days_held': days_held
+                }
+            
+            # Check drawdown from peak (if we have enough data)
+            if current_index > 0:
+                # Find the highest price since entry
+                prices_since_entry = data.iloc[:current_index + 1]['close']
+                highest_price = prices_since_entry.max()
+                drawdown_from_peak = ((current_price - highest_price) / highest_price) * 100
+                
+                if drawdown_from_peak <= -max_drawdown_pct:
+                    return True, {
+                        'summary': f'Max drawdown exceeded ({drawdown_from_peak:.2f}%)',
+                        'exit_type': 'drawdown',
+                        'pnl_pct': pnl_pct,
+                        'drawdown_from_peak': drawdown_from_peak,
+                        'days_held': days_held
+                    }
+            
+            # Technical exit conditions
+            macd_crossover_down = bool(current_row.get('macd_crossover_down', False))
+            price_below_ema_short = bool(current_row.get('price_below_ema_short', False))
+            price_below_ema_long = bool(current_row.get('price_below_ema_long', False))
+            ema_bearish = bool(current_row.get('ema_bearish', False))
+            rsi_overbought = bool(current_row.get('rsi_overbought', False))
+            volume_below_ma = bool(current_row.get('volume_below_ma', False))
+            
+            # Count technical exit conditions
+            technical_exit_conditions = sum([
+                macd_crossover_down,
+                price_below_ema_short,
+                price_below_ema_long,
+                ema_bearish,
+                rsi_overbought,
+                volume_below_ma
+            ])
+            
+            # Exit if at least 2 technical conditions are met (RELAXED - easier to exit and lock profits)
+            if technical_exit_conditions >= 2:
+                return True, {
+                    'summary': f'Technical exit signal ({technical_exit_conditions}/6 conditions) - RELAXED EXIT',
+                    'exit_type': 'technical',
+                    'pnl_pct': pnl_pct,
+                    'days_held': days_held,
+                    'macd_crossover_down': macd_crossover_down,
+                    'price_below_ema_short': price_below_ema_short,
+                    'price_below_ema_long': price_below_ema_long,
+                    'ema_bearish': ema_bearish,
+                    'rsi_overbought': rsi_overbought,
+                    'volume_below_ma': volume_below_ma,
+                    'technical_conditions': technical_exit_conditions
+                }
+            
+            # No exit signal
+            return False, {
+                'summary': f'Holding position (PnL: {pnl_pct:.2f}%, Days: {days_held})',
+                'pnl_pct': pnl_pct,
+                'days_held': days_held
             }
-        
-        # 2. Take profit: sell if gain exceeds threshold
-        if drawdown_from_entry > take_profit_pct:
-            return True, {
-                "summary": f"Take profit: {drawdown_from_entry*100:.2f}% gain (threshold {take_profit_pct*100:.2f}%)",
-                "profile": self.profile,
-                "gain_pct": drawdown_from_entry*100,
-                "threshold": take_profit_pct*100,
-                "exit_type": "take_profit"
-            }
-        
-        # 3. Stop loss: sell if loss exceeds threshold
-        if drawdown_from_entry < -stop_loss_pct:
-            return True, {
-                "summary": f"Stop loss: {drawdown_from_entry*100:.2f}% from entry (threshold {stop_loss_pct*100:.2f}%)",
-                "profile": self.profile,
-                "loss_pct": abs(drawdown_from_entry*100),
-                "threshold": stop_loss_pct*100,
-                "exit_type": "stop_loss"
-            }
-        
-        # 4. MACD crossover down
-        if current_row.get('macd_crossover_down', False) and previous_row.get('macd_crossover_up', False):
-            return True, {
-                "summary": "MACD crossover down",
-                "profile": self.profile,
-                "exit_type": "macd_crossover_down"
-            }
-        
-        # 5. Price below EMA short
-        if current_row.get('price_below_ema_short', False):
-            return True, {
-                "summary": "Price below EMA short",
-                "profile": self.profile,
-                "exit_type": "price_below_ema_short"
-            }
-        
-        # 6. Time-based exit
-        days_held = current_index - entry_index
-        if days_held > max_hold_days:
-            return True, {
-                "summary": f"Time-based exit: held {days_held} days (max {max_hold_days})",
-                "profile": self.profile,
-                "days_held": days_held,
-                "max_hold_days": max_hold_days,
-                "exit_type": "time_based_exit"
-            }
-        
-        return False, {"summary": "No exit signal", "profile": self.profile}
+            
+        except Exception as e:
+            logger.error(f"Error in should_exit: {str(e)}")
+            return False, {'summary': f'Error: {str(e)}'}
     
     def reset(self):
         """Reset the strategy state."""

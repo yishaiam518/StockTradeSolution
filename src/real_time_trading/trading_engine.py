@@ -145,7 +145,7 @@ class TradingEngine:
             position_size = strategy.calculate_position_size(data)
             
             # Get current price
-            current_price = data['Close'].iloc[-1]
+            current_price = data['close'].iloc[-1]
             
             # Place order
             order = await self.broker.place_order(
@@ -174,7 +174,7 @@ class TradingEngine:
                 return
                 
             # Get current price
-            current_price = data['Close'].iloc[-1]
+            current_price = data['close'].iloc[-1]
             
             # Place order
             order = await self.broker.place_order(

@@ -1,286 +1,258 @@
 #!/usr/bin/env python3
 """
-Enhanced Trade Report Generator for StockTradeSolution
-Generates comprehensive reports with multiple trades and their values
+Trade Report Generator with P&L Analysis
+
+Generates a comprehensive report showing all trades with their P&L calculations.
 """
 
 import sys
 import os
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-import warnings
-warnings.filterwarnings('ignore')
+from datetime import datetime
+from typing import Dict, List, Any
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-def generate_sample_trades():
-    """Generate sample trade data for demonstration"""
-    trades = []
-    
-    # Generate 25 sample trades with more realistic data
-    symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'AMD', 'INTC', 'SPY', 'QQQ']
-    strategies = ['MACDCanonical', 'MACDAggressive', 'MACDConservative']
-    profiles = ['conservative', 'moderate', 'aggressive']
-    
-    for i in range(25):
-        symbol = np.random.choice(symbols)
-        strategy = np.random.choice(strategies)
-        profile = np.random.choice(profiles)
-        
-        # Generate realistic trade data
-        entry_price = np.random.uniform(50, 800)
-        exit_price = entry_price * np.random.uniform(0.80, 1.30)  # -20% to +30%
-        quantity = np.random.randint(10, 200)
-        
-        # Calculate P&L
-        pnl = (exit_price - entry_price) * quantity
-        pnl_pct = ((exit_price - entry_price) / entry_price) * 100
-        
-        # Generate realistic dates
-        entry_date = datetime.now() - timedelta(days=np.random.randint(1, 365))
-        exit_date = entry_date + timedelta(days=np.random.randint(1, 45))
-        
-        # Determine trade direction and action
-        if entry_price < exit_price:
-            action = "BUY"
-            trade_type = "LONG"
-        else:
-            action = "SELL"
-            trade_type = "SHORT"
-        
-        trade = {
-            'trade_id': f"T{i+1:03d}",
-            'symbol': symbol,
-            'strategy': strategy,
-            'profile': profile,
-            'action': action,
-            'trade_type': trade_type,
-            'entry_date': entry_date,
-            'exit_date': exit_date,
-            'entry_price': round(entry_price, 2),
-            'exit_price': round(exit_price, 2),
-            'quantity': quantity,
-            'total_entry': round(entry_price * quantity, 2),
-            'total_exit': round(exit_price * quantity, 2),
-            'pnl': round(pnl, 2),
-            'pnl_pct': round(pnl_pct, 2),
-            'hold_days': (exit_date - entry_date).days,
-            'status': 'closed',
-            'exit_reason': np.random.choice(['take_profit', 'stop_loss', 'signal', 'timeout', 'trailing_stop'])
-        }
-        
-        trades.append(trade)
-    
-    return pd.DataFrame(trades)
+from src.backtesting.backtest_engine import BacktestEngine
+from src.utils.logger import get_logger
 
-def generate_detailed_report():
-    """Generate a comprehensive trade report"""
-    print("📊 Generating Enhanced Trade Report...")
-    print("=" * 80)
+def generate_trade_report_with_pnl():
+    """Generate a comprehensive trade report with P&L analysis."""
     
-    # Generate sample trades
-    trades_df = generate_sample_trades()
+    logger = get_logger(__name__)
+    logger.info("Generating comprehensive trade report with P&L analysis...")
     
-    # Calculate summary statistics
-    total_trades = len(trades_df)
-    winning_trades = len(trades_df[trades_df['pnl'] > 0])
-    losing_trades = len(trades_df[trades_df['pnl'] < 0])
-    win_rate = (winning_trades / total_trades) * 100
+    # Run a historical backtest to get trade data
+    backtest_engine = BacktestEngine()
     
-    total_pnl = trades_df['pnl'].sum()
-    avg_pnl = trades_df['pnl'].mean()
-    max_profit = trades_df['pnl'].max()
-    max_loss = trades_df['pnl'].min()
+    # Run the backtest
+    results = backtest_engine.run_historical_backtest(
+        strategy="MACD",
+        profile="balanced",
+        start_date="2023-01-01",
+        end_date="2023-12-31",
+        benchmark="SPY"
+    )
     
-    # Strategy performance
-    strategy_performance = trades_df.groupby('strategy').agg({
-        'pnl': ['sum', 'mean', 'count'],
-        'pnl_pct': 'mean'
-    }).round(2)
+    if not results or 'trades' not in results:
+        logger.error("No trade data available for report generation")
+        return
     
-    # Profile performance
-    profile_performance = trades_df.groupby('profile').agg({
-        'pnl': ['sum', 'mean', 'count'],
-        'pnl_pct': 'mean'
-    }).round(2)
+    trades = results['trades']
+    logger.info(f"Processing {len(trades)} trades for P&L analysis...")
     
-    # Symbol performance
-    symbol_performance = trades_df.groupby('symbol').agg({
-        'pnl': ['sum', 'mean', 'count'],
-        'pnl_pct': 'mean'
-    }).round(2)
+    # Create detailed trade analysis
+    trade_analysis = []
+    running_pnl = 0.0
+    total_buy_value = 0.0
+    total_sell_value = 0.0
     
-    # Print comprehensive report
-    print("🎯 ENHANCED TRADE REPORT SUMMARY")
-    print("=" * 80)
-    print(f"📅 Report Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📊 Total Trades: {total_trades}")
-    print(f"✅ Winning Trades: {winning_trades}")
-    print(f"❌ Losing Trades: {losing_trades}")
-    print(f"📈 Win Rate: {win_rate:.1f}%")
-    print(f"💰 Total P&L: ${total_pnl:,.2f}")
-    print(f"📊 Average P&L: ${avg_pnl:.2f}")
-    print(f"🚀 Max Profit: ${max_profit:.2f}")
-    print(f"📉 Max Loss: ${max_loss:.2f}")
+    # Group trades by symbol to calculate P&L
+    symbol_positions = {}
     
-    print("\n📋 DETAILED TRADE LIST WITH FULL DATES")
-    print("=" * 80)
-    print(f"{'ID':<6} {'Symbol':<6} {'Action':<4} {'Strategy':<15} {'Profile':<12} {'Entry Date':<19} {'Exit Date':<19} {'Entry':<8} {'Exit':<8} {'Qty':<4} {'Total Entry':<12} {'Total Exit':<12} {'P&L':<8} {'P&L%':<6} {'Days':<5}")
-    print("-" * 140)
-    
-    for _, trade in trades_df.iterrows():
-        entry_date_str = trade['entry_date'].strftime('%Y-%m-%d %H:%M')
-        exit_date_str = trade['exit_date'].strftime('%Y-%m-%d %H:%M')
+    for i, trade in enumerate(trades):
+        symbol = trade['symbol']
+        action = trade['action']
+        shares = trade['shares']
+        price = trade['price']
+        value = trade['value']
+        date = trade['date']
         
-        print(f"{trade['trade_id']:<6} {trade['symbol']:<6} {trade['action']:<4} {trade['strategy']:<15} {trade['profile']:<12} "
-              f"{entry_date_str:<19} {exit_date_str:<19} ${trade['entry_price']:<7.2f} ${trade['exit_price']:<7.2f} "
-              f"{trade['quantity']:<4} ${trade['total_entry']:<11.2f} ${trade['total_exit']:<11.2f} "
-              f"${trade['pnl']:<7.2f} {trade['pnl_pct']:<5.1f}% {trade['hold_days']:<5}")
-    
-    print("\n📊 STRATEGY PERFORMANCE ANALYSIS")
-    print("=" * 80)
-    for strategy in strategy_performance.index:
-        stats = strategy_performance.loc[strategy]
-        print(f"📈 {strategy}:")
-        print(f"   Total P&L: ${stats[('pnl', 'sum')]:,.2f}")
-        print(f"   Average P&L: ${stats[('pnl', 'mean')]:.2f}")
-        print(f"   Trade Count: {stats[('pnl', 'count')]}")
-        print(f"   Average Return: {stats[('pnl_pct', 'mean')]:.1f}%")
-        print()
-    
-    print("🎛️  PROFILE PERFORMANCE ANALYSIS")
-    print("=" * 80)
-    for profile in profile_performance.index:
-        stats = profile_performance.loc[profile]
-        print(f"⚙️  {profile.title()}:")
-        print(f"   Total P&L: ${stats[('pnl', 'sum')]:,.2f}")
-        print(f"   Average P&L: ${stats[('pnl', 'mean')]:.2f}")
-        print(f"   Trade Count: {stats[('pnl', 'count')]}")
-        print(f"   Average Return: {stats[('pnl_pct', 'mean')]:.1f}%")
-        print()
-    
-    print("📈 SYMBOL PERFORMANCE ANALYSIS")
-    print("=" * 80)
-    for symbol in symbol_performance.index:
-        stats = symbol_performance.loc[symbol]
-        print(f"💹 {symbol}:")
-        print(f"   Total P&L: ${stats[('pnl', 'sum')]:,.2f}")
-        print(f"   Average P&L: ${stats[('pnl', 'mean')]:.2f}")
-        print(f"   Trade Count: {stats[('pnl', 'count')]}")
-        print(f"   Average Return: {stats[('pnl_pct', 'mean')]:.1f}%")
-        print()
-    
-    # Risk analysis
-    print("⚠️  RISK ANALYSIS")
-    print("=" * 80)
-    
-    # Calculate drawdown
-    cumulative_pnl = trades_df['pnl'].cumsum()
-    running_max = cumulative_pnl.expanding().max()
-    drawdown = (cumulative_pnl - running_max) / running_max * 100
-    
-    max_drawdown = drawdown.min()
-    volatility = trades_df['pnl_pct'].std()
-    
-    print(f"📉 Maximum Drawdown: {max_drawdown:.1f}%")
-    print(f"📊 Volatility: {volatility:.1f}%")
-    print(f"📈 Sharpe Ratio: {(avg_pnl / volatility) if volatility > 0 else 0:.2f}")
-    
-    # Exit reason analysis
-    print("\n🚪 EXIT REASON ANALYSIS")
-    print("=" * 80)
-    exit_reasons = trades_df['exit_reason'].value_counts()
-    for reason, count in exit_reasons.items():
-        pnl_for_reason = trades_df[trades_df['exit_reason'] == reason]['pnl'].sum()
-        print(f"🔚 {reason.replace('_', ' ').title()}: {count} trades, P&L: ${pnl_for_reason:.2f}")
-    
-    # Time analysis
-    print("\n⏰ TIME ANALYSIS")
-    print("=" * 80)
-    avg_hold_days = trades_df['hold_days'].mean()
-    print(f"📅 Average Hold Time: {avg_hold_days:.1f} days")
-    
-    # Monthly performance
-    trades_df['month'] = trades_df['entry_date'].dt.to_period('M')
-    monthly_performance = trades_df.groupby('month')['pnl'].sum()
-    
-    print(f"📅 Monthly Performance:")
-    for month, pnl in monthly_performance.items():
-        print(f"   {month}: ${pnl:.2f}")
-    
-    # Trade type analysis
-    print("\n📊 TRADE TYPE ANALYSIS")
-    print("=" * 80)
-    trade_types = trades_df['trade_type'].value_counts()
-    for trade_type, count in trade_types.items():
-        pnl_for_type = trades_df[trades_df['trade_type'] == trade_type]['pnl'].sum()
-        print(f"📈 {trade_type}: {count} trades, P&L: ${pnl_for_type:.2f}")
-    
-    return trades_df
-
-def save_report_to_file(trades_df, filename="enhanced_trade_report.txt"):
-    """Save the enhanced report to a file"""
-    with open(filename, 'w') as f:
-        f.write("STOCKTRADESOLUTION - ENHANCED TRADE REPORT\n")
-        f.write("=" * 80 + "\n")
-        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+        # Initialize symbol tracking if not exists
+        if symbol not in symbol_positions:
+            symbol_positions[symbol] = {
+                'total_shares': 0.0,
+                'total_cost': 0.0,
+                'avg_price': 0.0,
+                'pnl': 0.0,
+                'trades': []
+            }
         
-        # Save detailed trade list
-        f.write("DETAILED TRADE LIST\n")
-        f.write("=" * 80 + "\n")
-        f.write(f"{'ID':<6} {'Symbol':<6} {'Action':<4} {'Strategy':<15} {'Profile':<12} {'Entry Date':<19} {'Exit Date':<19} {'Entry':<8} {'Exit':<8} {'Qty':<4} {'Total Entry':<12} {'Total Exit':<12} {'P&L':<8} {'P&L%':<6} {'Days':<5}\n")
-        f.write("-" * 140 + "\n")
+        position = symbol_positions[symbol]
         
-        for _, trade in trades_df.iterrows():
-            entry_date_str = trade['entry_date'].strftime('%Y-%m-%d %H:%M')
-            exit_date_str = trade['exit_date'].strftime('%Y-%m-%d %H:%M')
+        if action == 'BUY':
+            # Update position
+            old_shares = position['total_shares']
+            old_cost = position['total_cost']
             
-            f.write(f"{trade['trade_id']:<6} {trade['symbol']:<6} {trade['action']:<4} {trade['strategy']:<15} {trade['profile']:<12} "
-                   f"{entry_date_str:<19} {exit_date_str:<19} ${trade['entry_price']:<7.2f} ${trade['exit_price']:<7.2f} "
-                   f"{trade['quantity']:<4} ${trade['total_entry']:<11.2f} ${trade['total_exit']:<11.2f} "
-                   f"${trade['pnl']:<7.2f} {trade['pnl_pct']:<5.1f}% {trade['hold_days']:<5}\n")
-        
-        # Save summary statistics
-        f.write("\n\nSUMMARY STATISTICS\n")
-        f.write("=" * 80 + "\n")
-        f.write(f"Total Trades: {len(trades_df)}\n")
-        f.write(f"Total P&L: ${trades_df['pnl'].sum():,.2f}\n")
-        f.write(f"Win Rate: {(len(trades_df[trades_df['pnl'] > 0]) / len(trades_df) * 100):.1f}%\n")
-        f.write(f"Average P&L: ${trades_df['pnl'].mean():.2f}\n")
-        f.write(f"Max Profit: ${trades_df['pnl'].max():.2f}\n")
-        f.write(f"Max Loss: ${trades_df['pnl'].min():.2f}\n")
+            position['total_shares'] += shares
+            position['total_cost'] += value
+            position['avg_price'] = position['total_cost'] / position['total_shares']
+            
+            total_buy_value += value
+            
+            # Calculate running P&L (no P&L on buy, just track position)
+            trade_pnl = 0.0
+            running_pnl += trade_pnl
+            
+            trade_analysis.append({
+                'trade_id': i + 1,
+                'date': date,
+                'symbol': symbol,
+                'action': action,
+                'shares': shares,
+                'price': price,
+                'value': value,
+                'running_pnl': running_pnl,
+                'trade_pnl': trade_pnl,
+                'position_shares': position['total_shares'],
+                'position_avg_price': position['avg_price'],
+                'position_value': position['total_cost']
+            })
+            
+        elif action == 'SELL':
+            # Calculate P&L for this sell
+            if position['total_shares'] > 0:
+                # Calculate realized P&L
+                realized_pnl = (price - position['avg_price']) * shares
+                trade_pnl = realized_pnl
+                running_pnl += trade_pnl
+                
+                # Update position
+                position['total_shares'] -= shares
+                position['total_cost'] -= (position['avg_price'] * shares)
+                
+                if position['total_shares'] > 0:
+                    position['avg_price'] = position['total_cost'] / position['total_shares']
+                else:
+                    position['avg_price'] = 0.0
+                
+                total_sell_value += value
+                
+                trade_analysis.append({
+                    'trade_id': i + 1,
+                    'date': date,
+                    'symbol': symbol,
+                    'action': action,
+                    'shares': shares,
+                    'price': price,
+                    'value': value,
+                    'running_pnl': running_pnl,
+                    'trade_pnl': trade_pnl,
+                    'realized_pnl': realized_pnl,
+                    'position_shares': position['total_shares'],
+                    'position_avg_price': position['avg_price'],
+                    'position_value': position['total_cost']
+                })
     
-    print(f"\n💾 Enhanced report saved to: {filename}")
+    # Create summary statistics
+    summary_stats = {
+        'total_trades': len(trades),
+        'buy_trades': len([t for t in trades if t['action'] == 'BUY']),
+        'sell_trades': len([t for t in trades if t['action'] == 'SELL']),
+        'total_buy_value': total_buy_value,
+        'total_sell_value': total_sell_value,
+        'final_pnl': running_pnl,
+        'pnl_percentage': (running_pnl / total_buy_value * 100) if total_buy_value > 0 else 0,
+        'unique_symbols': len(symbol_positions),
+        'final_portfolio_value': results.get('final_portfolio_value', 0)
+    }
+    
+    # Generate the report
+    report = generate_report_text(trade_analysis, summary_stats, symbol_positions)
+    
+    # Save report to file
+    with open('comprehensive_trade_report.txt', 'w') as f:
+        f.write(report)
+    
+    logger.info("Comprehensive trade report generated: comprehensive_trade_report.txt")
+    return report
 
-def main():
-    """Main function"""
-    print("🚀 StockTradeSolution - Enhanced Trade Report Generator")
-    print("=" * 80)
+def generate_report_text(trade_analysis, summary_stats, symbol_positions):
+    """Generate formatted report text."""
     
-    try:
-        # Generate detailed report
-        trades_df = generate_detailed_report()
+    report = []
+    report.append("=" * 80)
+    report.append("COMPREHENSIVE TRADE REPORT WITH P&L ANALYSIS")
+    report.append("=" * 80)
+    report.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report.append("")
+    
+    # Summary Statistics
+    report.append("📊 SUMMARY STATISTICS")
+    report.append("-" * 40)
+    report.append(f"Total Trades: {summary_stats['total_trades']}")
+    report.append(f"Buy Trades: {summary_stats['buy_trades']}")
+    report.append(f"Sell Trades: {summary_stats['sell_trades']}")
+    report.append(f"Total Buy Value: ${summary_stats['total_buy_value']:,.2f}")
+    report.append(f"Total Sell Value: ${summary_stats['total_sell_value']:,.2f}")
+    report.append(f"Final P&L: ${summary_stats['final_pnl']:,.2f}")
+    report.append(f"P&L Percentage: {summary_stats['pnl_percentage']:.2f}%")
+    report.append(f"Unique Symbols Traded: {summary_stats['unique_symbols']}")
+    report.append(f"Final Portfolio Value: ${summary_stats['final_portfolio_value']:,.2f}")
+    report.append("")
+    
+    # Symbol-wise P&L Summary
+    report.append("📈 SYMBOL-WISE P&L SUMMARY")
+    report.append("-" * 40)
+    
+    symbol_pnl_summary = []
+    for symbol, position in symbol_positions.items():
+        if position['total_shares'] == 0:  # Closed positions only
+            symbol_pnl_summary.append({
+                'symbol': symbol,
+                'total_pnl': position['pnl'],
+                'trades_count': len(position['trades'])
+            })
+    
+    # Sort by P&L
+    symbol_pnl_summary.sort(key=lambda x: x['total_pnl'], reverse=True)
+    
+    for item in symbol_pnl_summary:
+        report.append(f"{item['symbol']}: ${item['total_pnl']:,.2f} ({item['trades_count']} trades)")
+    
+    report.append("")
+    
+    # Detailed Trade Log (first 50 trades)
+    report.append("📋 DETAILED TRADE LOG (First 50 Trades)")
+    report.append("-" * 40)
+    report.append(f"{'ID':<4} {'Date':<12} {'Symbol':<6} {'Action':<4} {'Shares':<8} {'Price':<8} {'Value':<10} {'P&L':<10} {'Running P&L':<12}")
+    report.append("-" * 80)
+    
+    for trade in trade_analysis[:50]:
+        pnl_str = f"${trade['trade_pnl']:,.2f}" if trade['trade_pnl'] != 0 else "N/A"
+        running_pnl_str = f"${trade['running_pnl']:,.2f}"
         
-        # Save to file
-        save_report_to_file(trades_df)
-        
-        print("\n🎉 Enhanced trade report generated successfully!")
-        print("📁 Check the generated files for detailed analysis")
-        print("📊 Report includes:")
-        print("   ✅ Full buy/sell dates and times")
-        print("   ✅ Entry and exit prices")
-        print("   ✅ Total entry and exit values")
-        print("   ✅ P&L calculations")
-        print("   ✅ Strategy and profile analysis")
-        print("   ✅ Risk metrics")
-        
-        return 0
-        
-    except Exception as e:
-        print(f"❌ Error generating report: {e}")
-        return 1
+        report.append(
+            f"{trade['trade_id']:<4} {trade['date']:<12} {trade['symbol']:<6} "
+            f"{trade['action']:<4} {trade['shares']:<8.2f} ${trade['price']:<7.2f} "
+            f"${trade['value']:<9.2f} {pnl_str:<10} {running_pnl_str:<12}"
+        )
+    
+    if len(trade_analysis) > 50:
+        report.append(f"... and {len(trade_analysis) - 50} more trades")
+    
+    report.append("")
+    
+    # P&L Analysis
+    report.append("💰 P&L ANALYSIS")
+    report.append("-" * 40)
+    
+    # Calculate P&L metrics
+    profitable_trades = [t for t in trade_analysis if t.get('trade_pnl', 0) > 0]
+    losing_trades = [t for t in trade_analysis if t.get('trade_pnl', 0) < 0]
+    
+    report.append(f"Profitable Trades: {len(profitable_trades)}")
+    report.append(f"Losing Trades: {len(losing_trades)}")
+    report.append(f"Win Rate: {len(profitable_trades) / len(trade_analysis) * 100:.1f}%")
+    
+    if profitable_trades:
+        avg_profit = sum(t['trade_pnl'] for t in profitable_trades) / len(profitable_trades)
+        report.append(f"Average Profit per Trade: ${avg_profit:,.2f}")
+    
+    if losing_trades:
+        avg_loss = sum(t['trade_pnl'] for t in losing_trades) / len(losing_trades)
+        report.append(f"Average Loss per Trade: ${avg_loss:,.2f}")
+    
+    report.append("")
+    report.append("=" * 80)
+    report.append("END OF REPORT")
+    report.append("=" * 80)
+    
+    return "\n".join(report)
 
 if __name__ == "__main__":
-    sys.exit(main()) 
+    report = generate_trade_report_with_pnl()
+    print(report) 

@@ -183,7 +183,7 @@ class BaseStrategy(ABC):
             bool: True if all required indicators are present
         """
         # Base strategy requires basic OHLCV data
-        required_columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+        required_columns = ['open', 'high', 'low', 'close', 'volume']
         
         for col in required_columns:
             if col not in data.columns:

@@ -16,6 +16,99 @@ parts/
 sdist/
 var/
 wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+log/
+
+# Data files
+data/cache/
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Configuration files with sensitive data
+.env
+config/local_settings.py
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Trading specific
+*.csv
+*.xlsx
+*.json
+!config/settings.yaml
+!requirements.txt
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Compiled files
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -131,86 +224,18 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Trading System Specific
-*.db
-*.sqlite
-*.sqlite3
-logs/
-*.log
-data/*.csv
-data/*.json
-models/*.pkl
-models/*.h5
-models/*.joblib
-temp/
-cache/
-.env.local
-.env.production
-config/local_settings.yaml
-config/secrets.yaml
-
-# IDE
-.vscode/
+# PyCharm
 .idea/
-*.swp
-*.swo
-*~
 
-# OS
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
+# VS Code
+.vscode/
 
-# Backup files
-*.bak
-*.backup
-*.old
-
-# Temporary files
-*.tmp
-*.temp
-
-# Database files
+# Trading system specific
+data/cache/
 *.db
 *.sqlite
 *.sqlite3
-
-# Data files (keep structure but ignore actual data)
-data/*.csv
-data/*.json
-data/*.xlsx
-data/*.xls
-
-# Model files
-models/*.pkl
-models/*.h5
-models/*.joblib
-models/*.model
-
-# Log files
 logs/
 *.log
-
-# Cache
-cache/
-.cache/
-
-# Environment variables
-.env
-.env.local
-.env.production
-
-# Secrets
-secrets.yaml
-config/secrets.yaml
-*.key
-*.pem
-
-# Trading specific
-portfolio_export.json
-trading_system.db
-temp_header.html src/web_dashboard/static/js/plotly-latest.min.js
+temp/
+tmp/

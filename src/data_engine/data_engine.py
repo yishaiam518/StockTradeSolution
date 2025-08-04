@@ -12,6 +12,11 @@ import sqlite3
 import json
 from src.utils.config_loader import config
 from src.utils.logger import logger
+from src.utils.timezone_utils import (
+    make_timezone_naive, normalize_dataframe_dates, 
+    normalize_index_dates, safe_date_comparison,
+    safe_date_range_filter, parse_date_string
+)
 
 
 class DataEngine:
@@ -154,7 +159,8 @@ class DataEngine:
             cached_data = self._get_cached_data(ticker, start_date, end_date)
             if cached_data is not None:
                 logger.info(f"Using cached data for {ticker}")
-                return cached_data
+                # Normalize dates to timezone-naive UTC
+                return normalize_index_dates(cached_data)
         
         # Fetch from API
         data = self._fetch_from_api(ticker, start_date, end_date)
@@ -163,7 +169,8 @@ class DataEngine:
             # Store in cache
             self._store_data(ticker, data)
             logger.info(f"Successfully fetched {len(data)} records for {ticker}")
-            return data
+            # Normalize dates to timezone-naive UTC
+            return normalize_index_dates(data)
         else:
             logger.error(f"Failed to fetch data for {ticker}")
             return pd.DataFrame()
@@ -198,6 +205,13 @@ class DataEngine:
             # Select only required columns
             data = data[required_columns]
             
+            # Set date as index and ensure timezone-naive
+            data.set_index('date', inplace=True)
+            
+            # Ensure timezone-naive timestamps
+            if data.index.tz is not None:
+                data.index = data.index.tz_localize(None)
+            
             return data
             
         except Exception as e:
@@ -219,6 +233,13 @@ class DataEngine:
                 
                 if not df.empty:
                     df['date'] = pd.to_datetime(df['date'])
+                    # Set date as index and ensure timezone-naive
+                    df.set_index('date', inplace=True)
+                    
+                    # Ensure timezone-naive timestamps
+                    if df.index.tz is not None:
+                        df.index = df.index.tz_localize(None)
+                    
                     return df
                 
         except Exception as e:
@@ -233,6 +254,8 @@ class DataEngine:
                 # Prepare data for storage
                 data_to_store = data.copy()
                 data_to_store['ticker'] = ticker
+                # Reset index to make date a column, then format it
+                data_to_store.reset_index(inplace=True)
                 data_to_store['date'] = data_to_store['date'].dt.strftime('%Y-%m-%d')
                 
                 # Store in database

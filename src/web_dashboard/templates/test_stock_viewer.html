@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Stock Viewer</title>
+</head>
+<body>
+    <h1>Testing Stock Viewer JavaScript</h1>
+    <div id="test-output"></div>
+    
+    <script>
+        console.log('Loading test page...');
+        document.getElementById('test-output').innerHTML = 'Loading JavaScript...';
+    </script>
+    
+    <script src="/static/js/stock_viewer_1754270169.js?v=999999&t={{ range(100000, 999999) | random }}&cache={{ range(1000000, 9999999) | random }}&bust={{ range(10000000, 99999999) | random }}"></script>
+    
+    <script>
+        console.log('Test page loaded');
+        document.getElementById('test-output').innerHTML = 'JavaScript loaded. Check console for messages.';
+    </script>
+</body>
+</html> 

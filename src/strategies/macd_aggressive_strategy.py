@@ -111,7 +111,7 @@ class MACDAggressiveStrategy(MACDStrategy):
             return {'signal': False, 'reason': 'Insufficient data'}
         
         current = data.iloc[i]
-        current_price = current['Close']
+        current_price = current['close']
         current_date = data.index[i]
         
         # Calculate PnL

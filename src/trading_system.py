@@ -22,6 +22,7 @@ from .indicators.indicators import TechnicalIndicators
 from .portfolio_management.portfolio_manager import PortfolioManager
 from .real_time_trading.position_manager import PositionManager
 from .strategies.macd_strategy import MACDStrategy
+from .strategies.macd_enhanced_strategy import MACDEnhancedStrategy
 from .strategies.base_strategy import BaseStrategy
 from .machine_learning.stock_scorer import UnifiedStockScorer, ScoringMode
 
@@ -84,6 +85,11 @@ class TradingSystem:
         macd_config = strategies_config.get('MACD', {})
         self.strategies['MACD'] = MACDStrategy(config_dict=macd_config, profile="balanced")
         self.strategy_configs['MACD'] = macd_config
+        
+        # Initialize Enhanced MACD Strategy
+        enhanced_macd_config = strategies_config.get('MACD_ENHANCED', {})
+        self.strategies['MACD_ENHANCED'] = MACDEnhancedStrategy(profile="balanced")
+        self.strategy_configs['MACD_ENHANCED'] = enhanced_macd_config
         
         self.logger.info(f"Initialized {len(self.strategies)} strategies")
     
@@ -373,36 +379,8 @@ class TradingSystem:
             return data
         
         try:
-            # Calculate indicators using the indicators module
-            indicators_data = data.copy()
-            
-            # Calculate MACD
-            if len(data) >= 26:
-                macd, signal, histogram = self.indicators.calculate_macd(data['close'])
-                indicators_data['macd'] = macd
-                indicators_data['macd_signal'] = signal
-                indicators_data['macd_histogram'] = histogram
-            
-            # Calculate RSI
-            if len(data) >= 14:
-                rsi = self.indicators.calculate_rsi(data['close'])
-                indicators_data['rsi'] = rsi
-            
-            # Calculate EMAs
-            if len(data) >= 12:
-                ema_short = self.indicators.calculate_ema(data['close'], 12)
-                ema_long = self.indicators.calculate_ema(data['close'], 26)
-                indicators_data['ema_12'] = ema_short
-                indicators_data['ema_26'] = ema_long
-            
-            # Calculate Bollinger Bands
-            if len(data) >= 20:
-                bb_upper, bb_middle, bb_lower = self.indicators.calculate_bollinger_bands(data['close'])
-                indicators_data['bb_upper'] = bb_upper
-                indicators_data['bb_middle'] = bb_middle
-                indicators_data['bb_lower'] = bb_lower
-            
-            return indicators_data
+            # Use the calculate_all_indicators method which handles all indicators properly
+            return self.indicators.calculate_all_indicators(data)
             
         except Exception as e:
             self.logger.error(f"Error calculating indicators: {e}")

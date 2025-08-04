@@ -18,9 +18,16 @@ from flask_socketio import SocketIO
 import pandas as pd
 import numpy as np
 import math
+import io
+import logging
 
 from ..utils.config_loader import config
 from ..utils.logger import logger
+from ..utils.timezone_utils import (
+    make_timezone_naive, normalize_dataframe_dates, 
+    normalize_index_dates, safe_date_comparison,
+    safe_date_range_filter, parse_date_string
+)
 from ..data_engine.data_engine import DataEngine
 from ..backtesting.backtest_engine import BacktestEngine
 from ..real_time_trading.trading_engine import TradingEngine
@@ -59,6 +66,10 @@ class DashboardApp:
         self.backtest_engine = BacktestEngine()
         self.chart_generator = ChartGenerator()
         
+        # Initialize data collection manager
+        from ..data_collection.data_manager import DataCollectionManager, DataCollectionConfig, Exchange
+        self.data_collection_manager = DataCollectionManager()
+        
         # Flask app
         self.app = Flask(__name__, static_folder='static')
         self.app.config['SECRET_KEY'] = 'your-secret-key-here'
@@ -92,8 +103,21 @@ class DashboardApp:
         
         @self.app.route('/')
         def index():
-            """Main dashboard page."""
             return render_template('dashboard.html')
+        
+        @self.app.route('/data-collection')
+        def data_collection():
+            return render_template('data_collection.html')
+
+        @self.app.route('/stock-viewer')
+        def stock_viewer():
+            """Render the full-screen stock viewer page."""
+            return render_template('stock_viewer.html')
+        
+        @self.app.route('/test-stock-viewer')
+        def test_stock_viewer():
+            """Test page for stock viewer JavaScript."""
+            return render_template('test_stock_viewer.html')
         
         @self.app.route('/api/portfolio')
         def get_portfolio():
@@ -132,6 +156,17 @@ class DashboardApp:
         def get_stored_trades():
             """Get trades from database with filtering."""
             try:
+                # Check if we have current backtest results
+                if hasattr(self, 'current_historical_trades_data') and self.current_historical_trades_data:
+                    print(f"🔍 DEBUG: Returning {len(self.current_historical_trades_data)} trades from current backtest results")
+                    return jsonify({
+                        'success': True,
+                        'trades': self.current_historical_trades_data,
+                        'count': len(self.current_historical_trades_data),
+                        'source': 'backtest_results'
+                    })
+                
+                # Fallback to database trades
                 from ..data_engine.data_engine import DataEngine
                 data_engine = DataEngine()
                 
@@ -152,10 +187,12 @@ class DashboardApp:
                     limit=limit
                 )
                 
+                print(f"🔍 DEBUG: Returning {len(trades)} trades from database")
                 return jsonify({
                     'success': True,
                     'trades': trades,
-                    'count': len(trades)
+                    'count': len(trades),
+                    'source': 'database'
                 })
                 
             except Exception as e:
@@ -624,103 +661,180 @@ class DashboardApp:
         
         @self.app.route('/api/automation/historical-backtest', methods=['POST'])
         def run_historical_backtest():
-            """Run historical backtest with automation strategies using centralized trading system."""
+            """Run historical backtest with simplified implementation matching test script."""
             try:
-                import numpy as np
-                import math
+                import io
+                import sys
+                from contextlib import redirect_stdout, redirect_stderr
+                
                 data = request.get_json()
+                if not data:
+                    return jsonify({'error': 'No JSON data provided'}), 400
+                
                 start_date = data.get('start_date')
                 end_date = data.get('end_date')
-                period = data.get('period')  # 1m, 6m, 1y, 2y, 3y, 5y
+                period = data.get('period', '1y')  # Default to 1y if not provided
                 benchmark = data.get('benchmark', 'SPY')
                 strategy = data.get('strategy', 'MACD')
                 profile = data.get('profile', 'balanced')
                 
-                # Calculate date range based on period only if start_date and end_date are not provided
-                if not start_date or not end_date:
-                    if period:
-                        end_dt = datetime.now()
-                        if period == '1m':
-                            start_dt = end_dt - timedelta(days=30)
-                        elif period == '6m':
-                            start_dt = end_dt - timedelta(days=180)
-                        elif period == '1y':
-                            start_dt = end_dt - timedelta(days=365)
-                        elif period == '2y':
-                            start_dt = end_dt - timedelta(days=730)
-                        elif period == '3y':
-                            start_dt = end_dt - timedelta(days=1095)
-                        elif period == '5y':
-                            start_dt = end_dt - timedelta(days=1825)
-                        else:
-                            return jsonify({'error': 'Invalid period'}), 400
-                        
-                        start_date = start_dt.strftime('%Y-%m-%d')
-                        end_date = end_dt.strftime('%Y-%m-%d')
-                    else:
-                        return jsonify({'error': 'Start date and end date are required'}), 400
-                
-                if not start_date or not end_date:
-                    return jsonify({'error': 'Start date and end date are required'}), 400
-                
-                # Run historical backtest using the new unified system
-                results = self.backtest_engine.run_historical_backtest(
-                    strategy=strategy,
-                    profile=profile,
-                    start_date=start_date,
-                    end_date=end_date,
-                    benchmark=benchmark
-                )
-                
-                if 'error' in results:
-                    return jsonify(results), 400
-                
-                # Flatten the results for frontend compatibility
-                flattened_results = {
-                    'strategy': results.get('strategy', strategy),
-                    'profile': results.get('profile', profile),
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'benchmark': benchmark,
-                    'trades': results.get('trades', []),
-                    'portfolio_values': results.get('portfolio_values', []),
-                    'symbols': results.get('symbols', [])
+                # Map frontend strategy names to backend strategy names
+                strategy_mapping = {
+                    'macd_enhanced': 'MACD_ENHANCED',
+                    'MACD_ENHANCED': 'MACD_ENHANCED',
+                    'macd': 'MACD',
+                    'MACD': 'MACD'
                 }
+                strategy = strategy_mapping.get(strategy, strategy)
                 
-                # Extract performance metrics from nested structure
-                performance = results.get('performance', {})
-                if performance:
-                    flattened_results.update({
-                        'total_return': performance.get('total_return', 0.0),
-                        'final_value': performance.get('final_value', 0.0),
-                        'volatility': performance.get('volatility', 0.0),
-                        'sharpe_ratio': performance.get('sharpe_ratio', 0.0),
-                        'max_drawdown': performance.get('max_drawdown', 0.0),
-                        'total_trades': performance.get('total_trades', 0),
-                        'winning_trades': performance.get('winning_trades', 0),
-                        'win_rate': performance.get('win_rate', 0.0),
-                        'avg_trade_return': performance.get('avg_trade_return', 0.0),
-                        'benchmark_return': performance.get('benchmark_return', 0.0),
-                        'alpha': performance.get('alpha', 0.0)
-                    })
+                # Calculate date range based on period
+                # Use a realistic end date (today's date) instead of datetime.now()
+                end_dt = datetime.now()
+                
+                # For testing, use a fixed end date to ensure we have historical data
+                # Use 2024-12-31 as end date to ensure we have full historical data
+                end_dt = datetime(2024, 12, 31)
+                
+                if period == '1m':
+                    start_dt = end_dt - timedelta(days=30)
+                elif period == '6m':
+                    start_dt = end_dt - timedelta(days=180)
+                elif period == '1y':
+                    start_dt = end_dt - timedelta(days=365)
+                elif period == '2y':
+                    start_dt = end_dt - timedelta(days=730)
+                elif period == '3y':
+                    start_dt = end_dt - timedelta(days=1095)
+                elif period == '5y':
+                    start_dt = end_dt - timedelta(days=1825)
                 else:
-                    # Default values if no performance data
-                    flattened_results.update({
-                        'total_return': 0.0,
-                        'final_value': 0.0,
-                        'volatility': 0.0,
-                        'sharpe_ratio': 0.0,
-                        'max_drawdown': 0.0,
-                        'total_trades': 0,
-                        'winning_trades': 0,
-                        'win_rate': 0.0,
-                        'avg_trade_return': 0.0,
-                        'benchmark_return': 0.0,
-                        'alpha': 0.0
-                    })
+                    return jsonify({'error': f'Invalid period: {period}'}), 400
                 
-                return jsonify(flattened_results)
+                # Use calculated dates if not provided
+                if not start_date:
+                    start_date = start_dt.strftime('%Y-%m-%d')
+                if not end_date:
+                    end_date = end_dt.strftime('%Y-%m-%d')
                 
+                # Debug: Print the actual date range being used
+                print(f"🔍 DEBUG: Using date range: {start_date} to {end_date}")
+                print(f"🔍 DEBUG: Period requested: {period}")
+                print(f"🔍 DEBUG: Strategy: {strategy}, Profile: {profile}, Benchmark: {benchmark}")
+                
+                # Create a custom string buffer to capture all output
+                output_buffer = io.StringIO()
+                
+                # Create a custom print function that writes to our buffer
+                def custom_print(*args, **kwargs):
+                    print(*args, **kwargs, file=output_buffer)
+                
+                # Create a custom logger handler that captures ALL output
+                class CustomHandler(logging.Handler):
+                    def emit(self, record):
+                        try:
+                            msg = self.format(record)
+                            output_buffer.write(msg + '\n')
+                            # Also print to console for debugging
+                            print(f"[CAPTURED] {msg}")
+                        except Exception:
+                            pass
+                
+                # Set up custom logging with more comprehensive capture
+                custom_handler = CustomHandler()
+                custom_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+                
+                # Add custom handler to ALL relevant loggers
+                key_loggers = [
+                    'src.backtesting.backtest_engine', 
+                    'TradingSystem', 
+                    'src.data_engine.data_cache',
+                    'src.data_engine.data_engine',
+                    'src.strategies.macd_strategy',
+                    'src.strategies.macd_enhanced_strategy',
+                    'src.portfolio_management.portfolio_manager'
+                ]
+                original_handlers = {}
+                
+                for logger_name in key_loggers:
+                    logger_obj = logging.getLogger(logger_name)
+                    original_handlers[logger_name] = logger_obj.handlers.copy()
+                    logger_obj.addHandler(custom_handler)
+                    # Set level to capture all messages
+                    logger_obj.setLevel(logging.DEBUG)
+                
+                # Run simplified historical backtest using direct implementation
+                with redirect_stdout(output_buffer), redirect_stderr(output_buffer):
+                    results = self._run_simplified_historical_backtest(
+                        strategy=strategy,
+                        profile=profile,
+                        start_date=start_date,
+                        end_date=end_date,
+                        benchmark=benchmark
+                    )
+                
+                # Restore original handlers
+                for logger_name, handlers in original_handlers.items():
+                    logger_obj = logging.getLogger(logger_name)
+                    # Remove our custom handler
+                    for handler in logger_obj.handlers[:]:
+                        if isinstance(handler, CustomHandler):
+                            logger_obj.removeHandler(handler)
+                    # Restore original handlers
+                    for handler in handlers:
+                        logger_obj.addHandler(handler)
+                
+                # Get captured output
+                terminal_output = output_buffer.getvalue()
+                
+                # Check if backtest failed
+                if 'error' in results:
+                    return jsonify({
+                        'error': results['error'],
+                        'terminal_output': terminal_output
+                    }), 400
+                
+                # Store the results for the frontend
+                self.current_historical_trades_data = results.get('trades', [])
+                
+                # Add terminal output to results
+                results['terminal_output'] = terminal_output
+                
+                # Debug: Print what we're storing
+                print(f"💾 Storing {len(self.current_historical_trades_data)} trades in current_historical_trades_data")
+                if self.current_historical_trades_data:
+                    print(f"🔍 First trade: {self.current_historical_trades_data[0]}")
+                    print(f"🔍 Last trade: {self.current_historical_trades_data[-1]}")
+                
+                return jsonify(results)
+                
+            except Exception as e:
+                import traceback
+                error_msg = f"Error running historical backtest: {str(e)}"
+                print(f"❌ {error_msg}")
+                print(f"🔍 Traceback: {traceback.format_exc()}")
+                return jsonify({'error': error_msg}), 500
+        
+        @self.app.route('/api/trades/clear', methods=['POST'])
+        def clear_trade_history():
+            """Clear the trade history."""
+            try:
+                # Only clear if explicitly requested with force=true
+                data = request.get_json() or {}
+                force_clear = data.get('force', False)
+                
+                if force_clear:
+                    # Clear the stored trade data
+                    if hasattr(self, 'current_historical_trades_data'):
+                        old_count = len(self.current_historical_trades_data) if self.current_historical_trades_data else 0
+                        delattr(self, 'current_historical_trades_data')
+                        print(f"🗑️ Cleared backtest results (forced) - removed {old_count} trades")
+                    return jsonify({'success': True, 'message': 'Trade history cleared'})
+                else:
+                    # Don't clear automatically - keep the data
+                    current_count = len(self.current_historical_trades_data) if hasattr(self, 'current_historical_trades_data') and self.current_historical_trades_data else 0
+                    print(f"🛡️ Trade history clear blocked - preserving {current_count} trades")
+                    return jsonify({'success': True, 'message': 'Trade history preserved'})
+                    
             except Exception as e:
                 return jsonify({'error': str(e)}), 500
         
@@ -748,6 +862,141 @@ class DashboardApp:
                 {'value': 'VTI', 'label': 'Total Stock Market (VTI)'}
             ]
             return jsonify(benchmarks)
+        
+        @self.app.route('/api/pnl/comprehensive')
+        def get_comprehensive_pnl():
+            """Get comprehensive P&L analysis including realized and unrealized gains."""
+            try:
+                from ..data_engine.data_cache import DataCache
+                import pandas as pd
+                
+                cache = DataCache()
+                all_transactions = cache.get_transaction_history()
+                
+                if all_transactions.empty:
+                    return jsonify({
+                        'success': False,
+                        'error': 'No transactions found'
+                    }), 404
+                
+                # Convert date column to datetime
+                all_transactions['date'] = pd.to_datetime(all_transactions['date'])
+                all_transactions = all_transactions.sort_values('date')
+                
+                # Initialize tracking
+                positions = {}  # Current open positions
+                realized_pnl = {}  # Realized P&L per symbol
+                trade_history = {}  # All trades per symbol
+                
+                # Process each transaction
+                for _, trade in all_transactions.iterrows():
+                    symbol = trade['symbol']
+                    action = trade['action']
+                    shares = trade['shares']
+                    price = trade['price']
+                    value = trade['value']
+                    date = trade['date']
+                    
+                    # Initialize symbol tracking
+                    if symbol not in trade_history:
+                        trade_history[symbol] = []
+                        realized_pnl[symbol] = 0.0
+                    
+                    trade_record = {
+                        'date': str(date),
+                        'action': action,
+                        'shares': shares,
+                        'price': price,
+                        'value': value
+                    }
+                    trade_history[symbol].append(trade_record)
+                    
+                    if action == 'BUY':
+                        # Add to positions
+                        if symbol not in positions:
+                            positions[symbol] = {
+                                'shares': shares,
+                                'avg_price': price,
+                                'total_cost': value,
+                                'last_price': price,
+                                'last_date': str(date)
+                            }
+                        else:
+                            # Update existing position
+                            pos = positions[symbol]
+                            total_shares = pos['shares'] + shares
+                            total_cost = pos['total_cost'] + value
+                            pos['shares'] = total_shares
+                            pos['avg_price'] = total_cost / total_shares
+                            pos['total_cost'] = total_cost
+                            pos['last_price'] = price
+                            pos['last_date'] = str(date)
+                            
+                    elif action == 'SELL':
+                        if symbol in positions:
+                            pos = positions[symbol]
+                            
+                            # Calculate realized P&L for this sell
+                            shares_to_sell = min(shares, pos['shares'])
+                            if shares_to_sell > 0:
+                                # Calculate P&L
+                                cost_basis = pos['avg_price'] * shares_to_sell
+                                sale_proceeds = price * shares_to_sell
+                                trade_pnl = sale_proceeds - cost_basis
+                                realized_pnl[symbol] += trade_pnl
+                                
+                                # Update position
+                                pos['shares'] -= shares_to_sell
+                                if pos['shares'] <= 0:
+                                    # Position closed
+                                    del positions[symbol]
+                                else:
+                                    # Partial position remains
+                                    pos['total_cost'] = pos['avg_price'] * pos['shares']
+                
+                # Calculate unrealized P&L
+                unrealized_pnl = {}
+                total_unrealized_pnl = 0
+                total_position_value = 0
+                
+                for symbol, pos in positions.items():
+                    current_value = pos['shares'] * pos['last_price']
+                    unrealized_pnl[symbol] = current_value - (pos['shares'] * pos['avg_price'])
+                    total_unrealized_pnl += unrealized_pnl[symbol]
+                    total_position_value += current_value
+                
+                # Calculate totals
+                total_realized_pnl = sum(realized_pnl.values())
+                total_pnl = total_realized_pnl + total_unrealized_pnl
+                
+                # Calculate performance metrics
+                total_buy_value = sum(trade['value'] for trades in trade_history.values() 
+                                     for trade in trades if trade['action'] == 'BUY')
+                total_return_pct = (total_pnl / total_buy_value) * 100 if total_buy_value > 0 else 0
+                
+                # Prepare response
+                response = {
+                    'success': True,
+                    'summary': {
+                        'total_realized_pnl': total_realized_pnl,
+                        'total_unrealized_pnl': total_unrealized_pnl,
+                        'total_pnl': total_pnl,
+                        'current_position_value': total_position_value,
+                        'total_return_pct': total_return_pct,
+                        'total_transactions': len(all_transactions),
+                        'unique_symbols': len(set(all_transactions['symbol']))
+                    },
+                    'realized_pnl': realized_pnl,
+                    'unrealized_pnl': unrealized_pnl,
+                    'positions': positions,
+                    'trade_history': trade_history
+                }
+                
+                return jsonify(response)
+                
+            except Exception as e:
+                self.logger.error(f"Error calculating comprehensive P&L: {e}")
+                return jsonify({'error': str(e)}), 500
         
         @self.app.route('/api/market-indexes')
         def get_market_indexes():
@@ -800,6 +1049,377 @@ class DashboardApp:
             except Exception as e:
                 self.logger.error(f"Error getting market indexes: {e}")
                 return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/trades/backtest-results')
+        def get_backtest_results():
+            """Get current backtest results."""
+            try:
+                if hasattr(self, 'current_historical_trades_data') and self.current_historical_trades_data:
+                    return jsonify({
+                        'success': True,
+                        'trades': self.current_historical_trades_data,
+                        'count': len(self.current_historical_trades_data),
+                        'source': 'backtest_results'
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'No backtest results available'
+                    }), 404
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting backtest results: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/trades/backtest-status')
+        def get_backtest_status():
+            """Check if backtest results are available."""
+            try:
+                has_results = hasattr(self, 'current_historical_trades_data') and self.current_historical_trades_data
+                return jsonify({
+                    'success': True,
+                    'has_results': has_results,
+                    'trade_count': len(self.current_historical_trades_data) if has_results else 0
+                })
+            except Exception as e:
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/start', methods=['POST'])
+        def start_data_collection():
+            """Start a data collection job."""
+            try:
+                from ..data_collection.data_manager import DataCollectionManager, DataCollectionConfig, Exchange
+                
+                data = request.get_json()
+                if not data:
+                    return jsonify({'error': 'No JSON data provided'}), 400
+                
+                # Extract parameters
+                exchange_name = data.get('exchange', 'NASDAQ')
+                start_date = data.get('start_date')
+                end_date = data.get('end_date')
+                symbols = data.get('symbols')
+                sectors = data.get('sectors')
+                market_cap_min = data.get('market_cap_min')
+                market_cap_max = data.get('market_cap_max')
+                include_etfs = data.get('include_etfs', True)
+                include_penny_stocks = data.get('include_penny_stocks', False)
+                
+                # Validate exchange
+                try:
+                    exchange = Exchange[exchange_name]
+                except KeyError:
+                    return jsonify({'error': f'Invalid exchange: {exchange_name}'}), 400
+                
+                # Create config
+                config = DataCollectionConfig(
+                    exchange=exchange,
+                    start_date=start_date,
+                    end_date=end_date,
+                    symbols=symbols,
+                    sectors=sectors,
+                    market_cap_min=market_cap_min,
+                    market_cap_max=market_cap_max,
+                    include_etfs=include_etfs,
+                    include_penny_stocks=include_penny_stocks
+                )
+                
+                # Initialize data manager
+                data_manager = DataCollectionManager()
+                
+                # Start collection
+                result = data_manager.collect_data(config)
+                
+                if result['status'] == 'success':
+                    return jsonify({
+                        'success': True,
+                        'collection_id': result['collection_id'],
+                        'message': f"Data collection completed. Collected {result['successful_symbols']} symbols.",
+                        'total_symbols': result['total_symbols'],
+                        'successful_symbols': result['successful_symbols'],
+                        'failed_symbols': result['failed_symbols']
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': result.get('error', 'Unknown error')
+                    }), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error starting data collection: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections', methods=['GET'])
+        def list_data_collections():
+            """List all data collections."""
+            try:
+                from ..data_collection.data_manager import DataCollectionManager
+                
+                data_manager = DataCollectionManager()
+                collections = data_manager.list_collections()
+                
+                return jsonify({
+                    'success': True,
+                    'collections': collections
+                })
+                
+            except Exception as e:
+                self.logger.error(f"Error listing data collections: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>', methods=['GET'])
+        def get_data_collection(collection_id):
+            """Get details of a specific data collection."""
+            try:
+                from ..data_collection.data_manager import DataCollectionManager
+                
+                data_manager = DataCollectionManager()
+                collection_data = data_manager.get_collected_data(collection_id)
+                
+                if collection_data:
+                    return jsonify({
+                        'success': True,
+                        'collection': {
+                            'collection_id': collection_id,
+                            'exchange': collection_data['config']['exchange'],
+                            'start_date': collection_data['config']['start_date'],
+                            'end_date': collection_data['config']['end_date'],
+                            'total_symbols': collection_data['total_symbols'],
+                            'successful_symbols': collection_data['successful_symbols'],
+                            'failed_count': collection_data['failed_count'],
+                            'collection_date': collection_data['collection_date'],
+                            'symbols_count': len(collection_data['data'])
+                        }
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Collection not found'
+                    }), 404
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting data collection: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>', methods=['DELETE'])
+        def delete_data_collection(collection_id):
+            """Delete a data collection."""
+            try:
+                from ..data_collection.data_manager import DataCollectionManager
+                
+                data_manager = DataCollectionManager()
+                success = data_manager.delete_collection(collection_id)
+                
+                if success:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Collection {collection_id} deleted successfully'
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Collection not found'
+                    }), 404
+                    
+            except Exception as e:
+                self.logger.error(f"Error deleting data collection: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/exchanges', methods=['GET'])
+        def get_available_exchanges():
+            """Get list of available exchanges."""
+            try:
+                from ..data_collection.data_manager import Exchange
+                
+                exchanges = [exchange.value for exchange in Exchange]
+                
+                return jsonify({
+                    'success': True,
+                    'exchanges': exchanges
+                })
+                
+            except Exception as e:
+                self.logger.error(f"Error getting exchanges: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/symbols', methods=['GET'])
+        def get_collection_symbols(collection_id):
+            """Get list of symbols in a collection."""
+            try:
+                collection_data = self.data_collection_manager.get_collected_data(collection_id)
+                
+                if collection_data and collection_data['data']:
+                    symbols = list(collection_data['data'].keys())
+                    return jsonify({
+                        'success': True,
+                        'symbols': symbols
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'No symbols found in collection'
+                    }), 404
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection symbols: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/symbols/<symbol>', methods=['GET'])
+        def get_symbol_data(collection_id, symbol):
+            """Get data for a specific symbol in a collection."""
+            try:
+                collection_data = self.data_collection_manager.get_collected_data(collection_id)
+                
+                if collection_data and collection_data['data'] and symbol in collection_data['data']:
+                    stock_data = collection_data['data'][symbol]
+                    
+                    # Convert DataFrame to JSON format
+                    stock_data_json = stock_data.to_dict('records')
+                    
+                    return jsonify({
+                        'success': True,
+                        'stock_data': stock_data_json
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Symbol {symbol} not found in collection'
+                    }), 404
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting symbol data: {e}")
+                return jsonify({'error': str(e)}), 500
+    
+    def _run_simplified_historical_backtest(self, strategy, profile, start_date, end_date, benchmark):
+        """Run a simplified historical backtest using the same logic as the test script."""
+        try:
+            # Initialize backtest engine (same as test script)
+            from ..backtesting.backtest_engine import BacktestEngine
+            from ..data_engine.data_cache import DataCache
+            
+            print(f"🧹 Clearing all cached data to ensure fresh backtest...")
+            
+            # Clear all caches first
+            try:
+                data_cache = DataCache()
+                data_cache.clear_all_cache()
+                print(f"✅ Cleared data cache")
+            except Exception as e:
+                print(f"⚠️  Could not clear data cache: {e}")
+            
+            # Initialize backtest engine
+            backtest_engine = BacktestEngine()
+            
+            # Clear backtest engine caches
+            if hasattr(backtest_engine, 'data_engine'):
+                try:
+                    backtest_engine.data_engine.clear_cache()
+                    print(f"✅ Cleared backtest engine data cache")
+                except Exception as e:
+                    print(f"⚠️  Could not clear backtest engine cache: {e}")
+            
+            if hasattr(backtest_engine, 'data_cache'):
+                try:
+                    backtest_engine.data_cache.clear_all_cache()
+                    print(f"✅ Cleared backtest engine data cache")
+                except Exception as e:
+                    print(f"⚠️  Could not clear backtest engine data cache: {e}")
+            
+            # Run backtest (same as test script)
+            print(f"🚀 Starting Historical Backtest")
+            print(f"📊 Period: 1y")
+            print(f"🎯 Strategy: {strategy} ({profile})")
+            print(f"📈 Benchmark: {benchmark}")
+            print(f"⏳ Calculating date range...")
+            print(f"📅 Date Range: {start_date} to {end_date}")
+            print(f"🔄 Making API call...")
+            
+            # Force fresh data collection
+            print(f"📡 Forcing fresh data collection...")
+            
+            results = backtest_engine.run_historical_backtest(
+                strategy=strategy,
+                profile=profile,
+                start_date=start_date,
+                end_date=end_date,
+                benchmark=benchmark
+            )
+            
+            # Check if backtest was successful
+            if not results or 'error' in results:
+                error_msg = results.get('error', 'Unknown error in backtest') if results else 'No results returned from backtest'
+                print(f"❌ Backtest failed: {error_msg}")
+                return {'error': error_msg}
+            
+            # Get trades from the backtest results
+            trades = results.get('trades', [])
+            
+            print(f"📊 Backtest completed with {len(trades)} trades")
+            
+            if not trades:
+                print(f"⚠️  No trades found in backtest results")
+                return {'error': 'No trades found in backtest results'}
+            
+            # Debug: Print first few trades
+            print(f"🔍 First 3 trades:")
+            for i, trade in enumerate(trades[:3]):
+                print(f"  {i+1}. {trade.get('symbol', 'N/A')} - {trade.get('action', 'N/A')} - {trade.get('date', 'N/A')}")
+            
+            # Convert to the format expected by the frontend
+            processed_trades = []
+            for trade in trades:
+                # Ensure we have all required fields
+                processed_trade = {
+                    'date': str(trade.get('date', '')),
+                    'symbol': trade.get('symbol', ''),
+                    'action': trade.get('action', ''),
+                    'shares': float(trade.get('shares', 0)),
+                    'price': float(trade.get('price', 0)),
+                    'value': float(trade.get('value', 0)),
+                    'pnl': float(trade.get('pnl', 0)),
+                    'pnl_pct': float(trade.get('pnl_pct', 0)),
+                    'strategy': trade.get('strategy', strategy),
+                    'entry_reason': trade.get('entry_reason', 'Strategy Entry'),
+                    'exit_reason': trade.get('exit_reason', 'N/A')
+                }
+                processed_trades.append(processed_trade)
+            
+            # Calculate summary from actual trade data
+            sell_trades = [t for t in processed_trades if t['action'] == 'SELL']
+            total_pnl = sum(t['pnl'] for t in sell_trades)
+            win_rate = 0
+            if sell_trades:
+                winning_trades = len([t for t in sell_trades if t['pnl'] > 0])
+                win_rate = (winning_trades / len(sell_trades)) * 100
+            
+            print(f"✅ Backtest completed successfully!")
+            print(f"📊 Total trades: {len(processed_trades)}")
+            print(f"💰 Final portfolio value: ${results.get('final_portfolio_value', 0):,.3f}")
+            print(f"📈 Total return: {results.get('total_return', 0):.2f}%")
+            print(f"🎯 Win rate: {win_rate:.1f}%")
+            print(f"💵 Total P&L: ${total_pnl:,.2f}")
+            
+            return {
+                'success': True,
+                'trades': processed_trades,
+                'summary': {
+                    'total_trades': len(processed_trades),
+                    'unique_symbols': len(set(trade['symbol'] for trade in processed_trades)),
+                    'final_portfolio_value': results.get('final_portfolio_value', 0),
+                    'total_return': results.get('total_return', 0),
+                    'total_pnl': total_pnl,
+                    'win_rate': win_rate,
+                    'sell_trades': len(sell_trades),
+                    'buy_trades': len([t for t in processed_trades if t['action'] == 'BUY'])
+                }
+            }
+            
+        except Exception as e:
+            import traceback
+            error_msg = f"Error in _run_simplified_historical_backtest: {str(e)}"
+            print(f"❌ {error_msg}")
+            print(f"🔍 Traceback: {traceback.format_exc()}")
+            return {'error': error_msg}
     
     def _get_current_prices(self) -> Dict[str, float]:
         """Get current prices for portfolio symbols."""
@@ -812,7 +1432,7 @@ class DashboardApp:
             try:
                 data = self.data_engine.get_data(symbol, period='1d', interval='1m')
                 if not data.empty:
-                    prices[symbol] = data['Close'].iloc[-1]
+                    prices[symbol] = data['close'].iloc[-1]
                 else:
                     prices[symbol] = 100.0  # Default price
             except Exception as e:
@@ -898,7 +1518,7 @@ class DashboardApp:
     
     def get_app(self):
         """Get the Flask app instance."""
-        return self.app 
+        return self.app
 
 if __name__ == "__main__":
     app = DashboardApp()

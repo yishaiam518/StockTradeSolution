@@ -223,7 +223,7 @@ class AutomationEngine:
                                 'action': signal_details['action'],
                                 'confidence': confidence,
                                 'reason': signal_details.get('reason', {}),
-                                'current_price': data['Close'].iloc[-1],
+                                'current_price': data['close'].iloc[-1],
                                 'timestamp': datetime.now()
                             }
                 
@@ -253,20 +253,20 @@ class AutomationEngine:
             # Add confidence based on signal type
             if signal_details['action'] == 'BUY':
                 # Check for strong bullish signals
-                if data['macd_crossover_up'].iloc[-1]:
+                if data['macd_crossover_up'].iloc[-1].item():
                     base_confidence += 0.2
-                if 40 <= data['rsi'].iloc[-1] <= 60:
+                if 40 <= data['rsi'].iloc[-1].item() <= 60:
                     base_confidence += 0.1
-                if data['price_above_ema_short'].iloc[-1]:
+                if data['price_above_ema_short'].iloc[-1].item():
                     base_confidence += 0.1
-                if data['price_above_ema_long'].iloc[-1]:
+                if data['price_above_ema_long'].iloc[-1].item():
                     base_confidence += 0.1
             
             elif signal_details['action'] == 'SELL':
                 # Check for strong bearish signals
-                if data['macd_crossover_down'].iloc[-1]:
+                if data['macd_crossover_down'].iloc[-1].item():
                     base_confidence += 0.2
-                if data['rsi'].iloc[-1] > 70 or data['rsi'].iloc[-1] < 30:
+                if data['rsi'].iloc[-1].item() > 70 or data['rsi'].iloc[-1].item() < 30:
                     base_confidence += 0.1
             
             return min(base_confidence, 1.0)
@@ -473,8 +473,8 @@ class HistoricalBacktestEngine:
         # Track benchmark
         benchmark_shares = 0
         if benchmark_data is not None:
-            # Handle both uppercase and lowercase column names
-            close_col = 'Close' if 'Close' in benchmark_data.columns else 'close'
+            # Use lowercase column names
+            close_col = 'close'
             benchmark_shares = capital / benchmark_data[close_col].iloc[0]
         
         # Simulate trading day by day
@@ -483,8 +483,8 @@ class HistoricalBacktestEngine:
             portfolio_value = capital
             for symbol, position in positions.items():
                 if symbol in stock_data and date in stock_data[symbol].index:
-                    # Handle both uppercase and lowercase column names
-                    close_col = 'Close' if 'Close' in stock_data[symbol].columns else 'close'
+                    # Use lowercase column names
+                    close_col = 'close'
                     current_price = stock_data[symbol].loc[date, close_col]
                     portfolio_value += position['shares'] * current_price
             
@@ -495,8 +495,8 @@ class HistoricalBacktestEngine:
             
             # Update benchmark value
             if benchmark_data is not None and date in benchmark_data.index:
-                # Handle both uppercase and lowercase column names
-                close_col = 'Close' if 'Close' in benchmark_data.columns else 'close'
+                # Use lowercase column names
+                close_col = 'close'
                 benchmark_price = benchmark_data.loc[date, close_col]
                 benchmark_value = benchmark_shares * benchmark_price
                 benchmark_values.append({
@@ -526,8 +526,8 @@ class HistoricalBacktestEngine:
                             continue
                         
                         # Calculate position size
-                        # Handle both uppercase and lowercase column names
-                        close_col = 'Close' if 'Close' in data.columns else 'close'
+                        # Use lowercase column names
+                        close_col = 'close'
                         current_price = data.loc[date, close_col]
                         max_position_value = capital * self.config.get('automation.max_position_size', 0.1)
                         shares = max_position_value / current_price
@@ -557,8 +557,8 @@ class HistoricalBacktestEngine:
                     elif signal_details['action'] == 'SELL' and has_position:
                         # Close position
                         position = positions[symbol]
-                        # Handle both uppercase and lowercase column names
-                        close_col = 'Close' if 'Close' in data.columns else 'close'
+                        # Use lowercase column names
+                        close_col = 'close'
                         current_price = data.loc[date, close_col]
                         
                         # Calculate PnL

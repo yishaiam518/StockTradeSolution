@@ -1,15 +1,9 @@
 """
-Data Collection Module for the SMART STOCK TRADING SYSTEM.
+Data Collection Module
 
-This module handles:
-- Bulk historical data collection
-- Scheduled daily updates
-- Real-time position monitoring
-- Multiple data source management
+Handles exchange-based data collection with filtering capabilities.
 """
 
-from .collector import DataCollector
-from .scheduler import DataScheduler
-from .sources import DataSource
+from .data_manager import DataCollectionManager, DataCollectionConfig, Exchange
 
-__all__ = ['DataCollector', 'DataScheduler', 'DataSource'] 
+__all__ = ['DataCollectionManager', 'DataCollectionConfig', 'Exchange'] 

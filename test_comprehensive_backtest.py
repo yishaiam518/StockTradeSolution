@@ -58,22 +58,23 @@ def test_comprehensive_backtest():
     
     # Check portfolio
     print(f"\n=== PORTFOLIO ANALYSIS ===")
-    print(f"Portfolio manager: {engine.portfolio_manager}")
-    print(f"Portfolio contents: {engine.portfolio_manager.portfolio}")
-    
-    # Check if positions were added
-    if engine.portfolio_manager.portfolio:
-        for symbol, position in engine.portfolio_manager.portfolio.items():
-            print(f"Position in {symbol}: {position}")
-    
-    # Check cash
-    print(f"Cash remaining: ${engine.cash:.2f}")
+    print(f"Trading system: {engine.trading_system}")
     
     # Check if trades were recorded
     print(f"\n=== TRADE RECORDING ===")
     print(f"Engine trades: {len(engine.trades)}")
     if engine.trades:
         print(f"First engine trade: {engine.trades[0]}")
+    
+    # Check portfolio values
+    print(f"Portfolio values recorded: {len(engine.portfolio_values)}")
+    if engine.portfolio_values:
+        print(f"Final portfolio value: ${engine.portfolio_values[-1]['value']:.2f}")
+    
+    # Check benchmark values
+    print(f"Benchmark values recorded: {len(engine.benchmark_values)}")
+    if engine.benchmark_values:
+        print(f"Final benchmark value: ${engine.benchmark_values[-1]['value']:.2f}")
 
 if __name__ == "__main__":
     test_comprehensive_backtest() 
