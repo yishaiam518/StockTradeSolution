@@ -565,7 +565,10 @@ class StockViewer {
                 tooltip: {
                     enable: true,
                     format: 'Date: ${point.x}<br/>Price: $${point.y}',
-                    header: 'Stock Data'
+                    header: 'Stock Data',
+                    shared: true,
+                    fill: '#ffffff',
+                    border: { color: '#0066FF', width: 1 }
                 },
                 series: [{
                     dataSource: chartData,
