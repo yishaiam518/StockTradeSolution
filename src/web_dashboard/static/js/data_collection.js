@@ -1,4 +1,51 @@
 // Data Collection JavaScript
+// Global function wrappers for inline onclick handlers
+function updateCollection(collectionId) {
+    console.log('Global updateCollection called with:', collectionId);
+    console.log('window.dataCollectionManager exists:', !!window.dataCollectionManager);
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.updateCollection(collectionId);
+    } else {
+        console.error('dataCollectionManager not found!');
+    }
+}
+
+function toggleAutoUpdate(collectionId, enable) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.toggleAutoUpdate(collectionId, enable);
+    }
+}
+
+function viewCollection(collectionId) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.viewCollection(collectionId);
+    }
+}
+
+function deleteCollection(collectionId) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.deleteCollection(collectionId);
+    }
+}
+
+function setCollectionInterval(collectionId, interval) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.setCollectionInterval(collectionId, interval);
+    }
+}
+
+function startCollectionScheduler(collectionId) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.startCollectionScheduler(collectionId);
+    }
+}
+
+function stopCollectionScheduler(collectionId) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.stopCollectionScheduler(collectionId);
+    }
+}
+
 class DataCollectionManager {
     constructor() {
         this.initializeEventListeners();
@@ -15,13 +62,23 @@ class DataCollectionManager {
 
         // Time period change
         document.getElementById('timePeriod').addEventListener('change', (e) => {
-            this.handleTimePeriodChange(e.target.value);
+            const customRange = document.getElementById('customDateRange');
+            if (e.target.value === 'custom') {
+                customRange.style.display = 'block';
+            } else {
+                customRange.style.display = 'none';
+            }
         });
 
         // Delete confirmation
         document.getElementById('confirmDelete').addEventListener('click', () => {
-            this.deleteCollection();
+            this.deleteConfirmedCollection();
         });
+
+        // Auto-refresh collections every 30 seconds
+        setInterval(() => {
+            this.loadCollections();
+        }, 30000);
     }
 
     async loadExchanges() {
@@ -46,13 +103,22 @@ class DataCollectionManager {
 
     async loadCollections() {
         try {
+            console.log('Loading collections...');
             const response = await fetch('/api/data-collection/collections');
             const data = await response.json();
+            console.log('Collections loaded:', data);
             
-            if (data.success) {
-                this.displayCollections(data.collections);
-            } else {
-                this.showAlert('Error loading collections', 'danger');
+            // Handle the API response structure
+            const collections = data.success ? data.collections : data;
+            console.log('Collections to display:', collections);
+            
+            this.displayCollections(collections);
+            
+            // Load scheduler status for each collection
+            for (const collection of collections) {
+                if (collection.auto_update) {
+                    this.loadCollectionSchedulerStatus(collection.collection_id);
+                }
             }
         } catch (error) {
             console.error('Error loading collections:', error);
@@ -62,55 +128,106 @@ class DataCollectionManager {
 
     displayCollections(collections) {
         const container = document.getElementById('collectionsList');
+        if (!container) {
+            console.error('Container not found');
+            return;
+        }
         
-        if (collections.length === 0) {
+        // Clear existing content
+        container.innerHTML = '';
+        
+        if (!collections || collections.length === 0) {
             container.innerHTML = `
-                <div class="text-center">
-                    <i class="fas fa-database fa-3x text-muted"></i>
-                    <p class="mt-3 text-muted">No data collections found</p>
-                    <p class="text-muted">Start by creating a new data collection above</p>
+                <div class="col-12">
+                    <div class="alert alert-info text-center">
+                        <i class="fas fa-info-circle"></i> No data collections found. Start by creating a new collection.
+                    </div>
                 </div>
             `;
             return;
         }
+        
+        // Create a row container for proper grid layout
+        const row = document.createElement('div');
+        row.className = 'row';
+        container.appendChild(row);
+        
+        collections.forEach(collection => {
+            const card = document.createElement('div');
+            card.className = 'col-md-6 col-lg-4 mb-4';
+            card.setAttribute('data-collection-id', collection.collection_id);
+            
+            const schedulerDisplay = collection.auto_update ? 'block' : 'none';
+            const intervalButtons = ['1min', '5min', '10min', '30min', '1h', '24h'].map(interval => 
+                `<button type="button" class="btn ${collection.update_interval === interval ? 'btn-primary' : 'btn-outline-primary'} btn-sm" onclick="setCollectionInterval('${collection.collection_id}', '${interval}')">${interval === '1min' ? '1 min' : interval === '1h' ? '1 hour' : interval === '24h' ? '24 hours' : interval}</button>`
+            ).join('');
 
-        const html = collections.map(collection => `
-            <div class="card collection-card mb-3">
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-8">
-                            <h6 class="card-title">
-                                <i class="fas fa-building text-primary"></i> ${collection.exchange}
-                            </h6>
-                            <p class="card-text text-muted mb-1">
-                                <i class="fas fa-calendar"></i> ${collection.start_date} to ${collection.end_date}
-                            </p>
-                            <p class="card-text text-muted mb-1">
-                                <i class="fas fa-chart-bar"></i> ${collection.successful_symbols} symbols collected
-                            </p>
-                            <p class="card-text text-muted mb-0">
-                                <i class="fas fa-clock"></i> Collected on ${new Date(collection.collection_date).toLocaleString()}
-                            </p>
+            // Default to not running (show Start button, hide Stop button)
+            const isRunning = collection.auto_update === true;
+            const startButtonDisplay = isRunning ? 'none' : 'inline-block';
+            const stopButtonDisplay = isRunning ? 'inline-block' : 'none';
+
+            card.innerHTML = `
+                <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start mb-2">
+                            <h6 class="card-title mb-0">${collection.exchange}</h6>
+                            <span class="badge ${collection.failed_count > 0 ? 'bg-danger' : 'bg-success'}">${collection.failed_count} failed</span>
                         </div>
-                        <div class="col-md-4 text-end">
-                            <span class="badge bg-success status-badge">
-                                <i class="fas fa-check"></i> Completed
-                            </span>
-                            <div class="mt-2">
-                                <button class="btn btn-sm btn-outline-primary" onclick="dataCollectionManager.viewCollection('${collection.collection_id}')">
-                                    <i class="fas fa-eye"></i> View
-                                </button>
-                                <button class="btn btn-sm btn-outline-danger" onclick="dataCollectionManager.confirmDelete('${collection.collection_id}')">
-                                    <i class="fas fa-trash"></i> Delete
-                                </button>
+                        <p class="card-text small text-muted mb-2">
+                            ${collection.start_date} to ${collection.end_date}<br>
+                            ${collection.successful_symbols} symbols collected
+                        </p>
+                        <p class="card-text small text-muted mb-3">
+                            Last update: ${collection.last_updated || 'Never'}
+                        </p>
+                        
+                        <!-- Scheduler Controls -->
+                        <div class="scheduler-controls mt-3">
+                            <!-- Row 1: Time Interval Selection (Full Width) -->
+                            <div class="col-12 mb-3">
+                                <div class="d-flex flex-column">
+                                    <label class="form-label small text-muted mb-2">Update Interval:</label>
+                                    <div class="d-flex flex-wrap gap-1">
+                                        ${intervalButtons}
+                                    </div>
+                                    <small class="text-muted mt-1">Current: ${collection.update_interval || '24h'}</small>
+                                </div>
+                            </div>
+                            
+                            <!-- Row 2: Start/Stop Controls and Status -->
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="btn-group w-100" role="group">
+                                        <button type="button" class="btn btn-success btn-sm scheduler-btn" id="start-${collection.collection_id}" onclick="startScheduler('${collection.collection_id}')" style="display: ${collection.auto_update ? 'none' : 'inline-block'};">
+                                            <i class="fas fa-play"></i> Start
+                                        </button>
+                                        <button type="button" class="btn btn-danger btn-sm scheduler-btn" id="stop-${collection.collection_id}" onclick="stopScheduler('${collection.collection_id}')" style="display: ${collection.auto_update ? 'inline-block' : 'none'};">
+                                            <i class="fas fa-stop"></i> Stop
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex flex-column">
+                                        <div class="small text-muted">
+                                            <span id="last-run-${collection.collection_id}">Last: ${collection.last_run ? new Date(collection.last_run).toLocaleString() : 'Never'}</span> | 
+                                            <span id="next-run-${collection.collection_id}">Next: ${collection.auto_update ? (collection.next_run ? new Date(collection.next_run).toLocaleString() : 'Not scheduled') : 'Not scheduled'}</span>
+                                        </div>
+
+                                        <div class="small text-muted">
+                                            <span class="text-success">✓ ${collection.successful_symbols || 0} successful</span> | 
+                                            <span class="text-danger">✗ ${collection.failed_count || 0} failed</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
-
-        container.innerHTML = html;
+            `;
+            
+            row.appendChild(card);
+        });
     }
 
     handleTimePeriodChange(period) {
@@ -749,7 +866,7 @@ class DataCollectionManager {
                 this.showAlert('Collection deleted successfully', 'success');
                 this.loadCollections(); // Refresh the list
             } else {
-                this.showAlert(`Error: ${result.error}`, 'danger');
+                this.showAlert('Error deleting collection: ' + result.error, 'danger');
             }
         } catch (error) {
             console.error('Error deleting collection:', error);
@@ -758,8 +875,198 @@ class DataCollectionManager {
 
         // Close modal
         const modal = bootstrap.Modal.getInstance(document.getElementById('deleteModal'));
-        modal.hide();
+        if (modal) {
+            modal.hide();
+        }
+        
         this.collectionToDelete = null;
+    }
+
+    async updateCollection(collectionId) {
+        try {
+            console.log('Starting update for collection:', collectionId);
+            this.showAlert('Updating collection...', 'info');
+            
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/update`, {
+                method: 'POST'
+            });
+            
+            console.log('Update response status:', response.status);
+            const data = await response.json();
+            console.log('Update response data:', data);
+            
+            if (data.success) {
+                this.showAlert(`Collection updated successfully! ${data.updated_symbols} symbols updated, ${data.failed_symbols} failed`, 'success');
+                // Force reload collections to show updated data
+                console.log('Scheduling collection reload in 1 second...');
+                setTimeout(() => {
+                    console.log('Reloading collections after update...');
+                    this.loadCollections();
+                }, 1000);
+            } else {
+                this.showAlert('Error updating collection: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error updating collection:', error);
+            this.showAlert('Error updating collection', 'danger');
+        }
+    }
+
+    async setCollectionInterval(collectionId, interval) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/auto-update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    enable: true,
+                    interval: interval
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showAlert(`Collection interval updated to ${interval}`, 'success');
+                // Refresh the collections display to show the updated interval selection
+                this.loadCollections();
+            } else {
+                this.showAlert('Error updating collection interval: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error setting collection interval:', error);
+            this.showAlert('Error updating collection interval', 'danger');
+        }
+    }
+
+    async toggleAutoUpdate(collectionId, enable) {
+        try {
+            // First get current details to see if auto-update is enabled
+            const detailsResponse = await fetch(`/api/data-collection/collections/${collectionId}`);
+            const detailsData = await detailsResponse.json();
+            
+            if (!detailsData.success) {
+                this.showAlert('Error getting collection details: ' + detailsData.error, 'danger');
+                return;
+            }
+            
+            const currentAutoUpdate = detailsData.collection.auto_update || false;
+            const newAutoUpdate = !currentAutoUpdate; // Simply toggle the current state
+            
+            // If enabling, use the current interval or default to 24h
+            const interval = detailsData.collection.update_interval || '24h';
+            
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/auto-update`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    enable: newAutoUpdate,
+                    interval: interval
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                const status = newAutoUpdate ? 'enabled' : 'disabled';
+                this.showAlert(`Auto-update ${status} for collection`, 'success');
+                this.loadCollections();
+            } else {
+                this.showAlert('Error toggling auto-update: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error toggling auto-update:', error);
+            this.showAlert('Error toggling auto-update', 'danger');
+        }
+    }
+
+    async startCollectionScheduler(collectionId) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/scheduler/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showAlert(`Scheduler started for collection ${collectionId}`, 'success');
+                document.getElementById(`start-${collectionId}`).style.display = 'none';
+                document.getElementById(`stop-scheduler-${collectionId}`).style.display = 'inline-block';
+                document.getElementById(`status-${collectionId}`).textContent = 'Running';
+            } else {
+                this.showAlert('Error starting scheduler: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error starting collection scheduler:', error);
+            this.showAlert('Error starting collection scheduler', 'danger');
+        }
+    }
+
+    async stopCollectionScheduler(collectionId) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/scheduler/stop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showAlert(`Scheduler stopped for collection ${collectionId}`, 'success');
+                document.getElementById(`start-${collectionId}`).style.display = 'inline-block';
+                document.getElementById(`stop-scheduler-${collectionId}`).style.display = 'none';
+                document.getElementById(`status-${collectionId}`).textContent = 'Stopped';
+            } else {
+                this.showAlert('Error stopping scheduler: ' + data.error, 'danger');
+            }
+        } catch (error) {
+            console.error('Error stopping collection scheduler:', error);
+            this.showAlert('Error stopping collection scheduler', 'danger');
+        }
+    }
+
+    async loadCollectionSchedulerStatus(collectionId) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/scheduler/status`);
+            const data = await response.json();
+            
+            if (data.success) {
+                const startBtn = document.getElementById(`start-${collectionId}`);
+                const stopBtn = document.getElementById(`stop-${collectionId}`);
+                const lastRunElement = document.getElementById(`last-run-${collectionId}`);
+                const nextRunElement = document.getElementById(`next-run-${collectionId}`);
+                
+                // Update button visibility based on auto_update status
+                if (startBtn && stopBtn) {
+                    if (data.auto_update) {
+                        startBtn.style.display = 'none';
+                        stopBtn.style.display = 'inline-block';
+                    } else {
+                        startBtn.style.display = 'inline-block';
+                        stopBtn.style.display = 'none';
+                    }
+                }
+
+                // Update last run and next run times
+                if (lastRunElement) {
+                    lastRunElement.textContent = `Last: ${data.last_run ? new Date(data.last_run).toLocaleString() : 'Never'}`;
+                }
+
+                if (nextRunElement) {
+                    nextRunElement.textContent = `Next: ${data.auto_update ? (data.next_run ? new Date(data.next_run).toLocaleString() : 'Calculating...') : 'Not scheduled'}`;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading collection scheduler status:', error);
+        }
     }
 
     showAlert(message, type) {
@@ -782,9 +1089,92 @@ class DataCollectionManager {
             }
         }, 5000);
     }
+
+    // Scheduler Functions
+    async startScheduler(collectionId) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/scheduler/start`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showAlert(`Scheduler started for collection ${collectionId}`, 'success');
+                // Update the UI to show running status
+                this.updateSchedulerStatus(collectionId, true);
+                // Refresh collections to get updated status
+                await this.loadCollections();
+            } else {
+                this.showAlert(`Error starting scheduler: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error starting scheduler:', error);
+            this.showAlert('Error starting scheduler', 'error');
+        }
+    }
+
+    async stopScheduler(collectionId) {
+        try {
+            const response = await fetch(`/api/data-collection/collections/${collectionId}/scheduler/stop`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                this.showAlert(`Scheduler stopped for collection ${collectionId}`, 'success');
+                // Update the UI to show stopped status
+                this.updateSchedulerStatus(collectionId, false);
+                // Refresh collections to get updated status
+                await this.loadCollections();
+            } else {
+                this.showAlert(`Error stopping scheduler: ${data.message}`, 'error');
+            }
+        } catch (error) {
+            console.error('Error stopping scheduler:', error);
+            this.showAlert('Error stopping scheduler', 'error');
+        }
+    }
+
+    updateSchedulerStatus(collectionId, isRunning) {
+        const startBtn = document.getElementById(`start-${collectionId}`);
+        const stopBtn = document.getElementById(`stop-${collectionId}`);
+        
+        if (startBtn && stopBtn) {
+            if (isRunning) {
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'inline-block';
+            } else {
+                startBtn.style.display = 'inline-block';
+                stopBtn.style.display = 'none';
+            }
+        }
+    }
+
+    updateSchedulerStatusText(collectionId, isRunning) {
+        const statusContainer = document.querySelector(`[data-collection-id="${collectionId}"] .scheduler-status`);
+        if (statusContainer) {
+            const now = new Date();
+            const nextRun = isRunning ? new Date(now.getTime() + 60000).toLocaleTimeString() : 'Not scheduled';
+            const lastRun = isRunning ? now.toLocaleTimeString() : 'Never';
+            
+            statusContainer.innerHTML = `Last: ${lastRun} | Next: ${nextRun}`;
+        }
+    }
 }
 
+// Make functions globally available
+window.startScheduler = (collectionId) => window.dataCollectionManager.startScheduler(collectionId);
+window.stopScheduler = (collectionId) => window.dataCollectionManager.stopScheduler(collectionId);
+
 // Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', function() {
     window.dataCollectionManager = new DataCollectionManager();
 }); 

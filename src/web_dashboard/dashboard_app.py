@@ -1151,21 +1151,28 @@ class DashboardApp:
         
         @self.app.route('/api/data-collection/collections', methods=['GET'])
         def list_data_collections():
-            """List all data collections."""
+            """List all data collections"""
             try:
-                from ..data_collection.data_manager import DataCollectionManager
+                collections = self.data_collection_manager.list_collections()
                 
-                data_manager = DataCollectionManager()
-                collections = data_manager.list_collections()
+                # Add auto_update and update_interval fields to each collection
+                for collection in collections:
+                    collection['auto_update'] = collection.get('auto_update', False)
+                    collection['update_interval'] = collection.get('update_interval', '24h')
+                    collection['last_run'] = collection.get('last_run', None)
+                    collection['next_run'] = collection.get('next_run', None)
+                    collection['successful_symbols'] = collection.get('successful_symbols', 0)
+                    collection['failed_count'] = collection.get('failed_count', 0)
                 
                 return jsonify({
                     'success': True,
                     'collections': collections
                 })
-                
             except Exception as e:
-                self.logger.error(f"Error listing data collections: {e}")
-                return jsonify({'error': str(e)}), 500
+                return jsonify({
+                    'success': False,
+                    'message': f'Error listing collections: {str(e)}'
+                }), 500
         
         @self.app.route('/api/data-collection/collections/<collection_id>', methods=['GET'])
         def get_data_collection(collection_id):
@@ -1175,8 +1182,9 @@ class DashboardApp:
                 
                 data_manager = DataCollectionManager()
                 collection_data = data_manager.get_collected_data(collection_id)
+                collection_details = data_manager.get_collection_details(collection_id)
                 
-                if collection_data:
+                if collection_data and collection_details:
                     return jsonify({
                         'success': True,
                         'collection': {
@@ -1188,7 +1196,9 @@ class DashboardApp:
                             'successful_symbols': collection_data['successful_symbols'],
                             'failed_count': collection_data['failed_count'],
                             'collection_date': collection_data['collection_date'],
-                            'symbols_count': len(collection_data['data'])
+                            'symbols_count': len(collection_data['data']),
+                            'auto_update': collection_details.get('auto_update', False),
+                            'last_updated': collection_details.get('last_updated', collection_data['collection_date'])
                         }
                     })
                 else:
@@ -1288,6 +1298,288 @@ class DashboardApp:
                     
             except Exception as e:
                 self.logger.error(f"Error getting symbol data: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/update', methods=['POST'])
+        def update_data_collection(collection_id):
+            """Update a data collection to include data up to today."""
+            try:
+                result = self.data_collection_manager.update_collection(collection_id)
+                
+                if result['success']:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Collection updated successfully',
+                        'updated_symbols': result['updated_symbols'],
+                        'failed_symbols': result['failed_symbols'],
+                        'new_end_date': result['new_end_date']
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': result.get('error', 'Unknown error')
+                    }), 400
+                    
+            except Exception as e:
+                self.logger.error(f"Error updating collection {collection_id}: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/auto-update', methods=['POST'])
+        def toggle_auto_update(collection_id):
+            """Toggle auto-update for a specific collection."""
+            try:
+                data = request.get_json()
+                enable = data.get('enable', True)
+                interval = data.get('interval', '24h')
+                
+                # Initialize scheduler if not already done
+                if not hasattr(self, 'data_scheduler'):
+                    from ..data_collection.scheduler import DataCollectionScheduler
+                    self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
+                
+                # Enable/disable auto-update in database
+                success = self.data_collection_manager.enable_auto_update(collection_id, enable, interval)
+                
+                if success:
+                    if enable:
+                        # Set the interval for the scheduler
+                        self.data_scheduler.set_collection_interval(collection_id, interval)
+                        
+                        # Start the scheduler for this collection
+                        scheduler_started = self.data_scheduler.start_collection_scheduler(collection_id)
+                        if scheduler_started:
+                            return jsonify({
+                                'success': True,
+                                'message': f'Auto-update enabled for collection {collection_id} with {interval} interval',
+                                'scheduler_started': True,
+                                'interval': interval
+                            })
+                        else:
+                            return jsonify({
+                                'success': True,
+                                'message': f'Auto-update enabled for collection {collection_id} with {interval} interval',
+                                'scheduler_started': False,
+                                'warning': 'Scheduler already running',
+                                'interval': interval
+                            })
+                    else:
+                        # Stop the scheduler for this collection
+                        self.data_scheduler.stop_collection_scheduler(collection_id)
+                        return jsonify({
+                            'success': True,
+                            'message': f'Auto-update disabled for collection {collection_id}',
+                            'scheduler_stopped': True
+                        })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Failed to update auto-update setting for {collection_id}'
+                    }), 400
+                    
+            except Exception as e:
+                self.logger.error(f"Error toggling auto-update for {collection_id}: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/collections/<collection_id>/scheduler/start', methods=['POST'])
+        def start_collection_scheduler(collection_id):
+            """Start the scheduler for a specific collection"""
+            try:
+                # Initialize scheduler if not already done
+                if not hasattr(self, 'data_scheduler'):
+                    from ..data_collection.scheduler import DataCollectionScheduler
+                    self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
+                
+                # Get collection details to determine the interval
+                collection_details = self.data_collection_manager.get_collection_details(collection_id)
+                if not collection_details:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Collection {collection_id} not found'
+                    }), 404
+                
+                # Get current time for last_run
+                from datetime import datetime, timedelta
+                now = datetime.now()
+                
+                # Calculate next run time based on interval
+                interval = collection_details.get('update_interval', '24h')
+                if interval == '1min':
+                    next_run = now + timedelta(minutes=1)
+                elif interval == '5min':
+                    next_run = now + timedelta(minutes=5)
+                elif interval == '10min':
+                    next_run = now + timedelta(minutes=10)
+                elif interval == '30min':
+                    next_run = now + timedelta(minutes=30)
+                elif interval == '1h':
+                    next_run = now + timedelta(hours=1)
+                else:  # 24h default
+                    next_run = now + timedelta(hours=24)
+                
+                # Update the collection's auto_update status in the database with run times
+                self.logger.info(f"Starting scheduler for {collection_id} with interval {interval}")
+                self.logger.info(f"last_run: {now.isoformat()}, next_run: {next_run.isoformat()}")
+                success = self.data_collection_manager.enable_auto_update(
+                    collection_id, 
+                    True, 
+                    interval, 
+                    now.isoformat(), 
+                    next_run.isoformat()
+                )
+                
+                if success:
+                    # Actually start the background scheduler thread
+                    self.logger.info(f"Attempting to start background scheduler for collection {collection_id}")
+                    scheduler_started = self.data_scheduler.start_collection_scheduler(collection_id)
+                    if scheduler_started:
+                        self.logger.info(f"Background scheduler thread started for collection {collection_id}")
+                    else:
+                        self.logger.warning(f"Failed to start background scheduler thread for collection {collection_id}")
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': f'Scheduler started for collection {collection_id}',
+                        'collection_id': collection_id,
+                        'last_run': now.isoformat(),
+                        'next_run': next_run.isoformat(),
+                        'interval': interval
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Failed to start scheduler for collection {collection_id}'
+                    }), 500
+                    
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'Error starting scheduler: {str(e)}'
+                }), 500
+
+        @self.app.route('/api/data-collection/collections/<collection_id>/scheduler/stop', methods=['POST'])
+        def stop_collection_scheduler(collection_id):
+            """Stop the scheduler for a specific collection"""
+            try:
+                # Initialize scheduler if not already done
+                if not hasattr(self, 'data_scheduler'):
+                    from ..data_collection.scheduler import DataCollectionScheduler
+                    self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
+                
+                # Stop the background scheduler thread first
+                scheduler_stopped = self.data_scheduler.stop_collection_scheduler(collection_id)
+                if scheduler_stopped:
+                    self.logger.info(f"Background scheduler thread stopped for collection {collection_id}")
+                else:
+                    self.logger.warning(f"Failed to stop background scheduler thread for collection {collection_id}")
+                
+                # Update the collection's auto_update status in the database
+                success = self.data_collection_manager.enable_auto_update(collection_id, False, None, None, None)
+                
+                if success:
+                    return jsonify({
+                        'success': True,
+                        'message': f'Scheduler stopped for collection {collection_id}',
+                        'collection_id': collection_id,
+                        'last_run': None,
+                        'next_run': None
+                    })
+                else:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Failed to stop scheduler for collection {collection_id}'
+                    }), 400
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'Error stopping scheduler: {str(e)}'
+                }), 500
+
+        @self.app.route('/api/data-collection/collections/<collection_id>/scheduler/status', methods=['GET'])
+        def get_collection_scheduler_status(collection_id):
+            """Get the scheduler status for a specific collection"""
+            try:
+                # Initialize scheduler if not already done
+                if not hasattr(self, 'data_scheduler'):
+                    from ..data_collection.scheduler import DataCollectionScheduler
+                    self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
+                
+                # Get real-time status from the scheduler
+                scheduler_status = self.data_scheduler.get_collection_status(collection_id)
+                self.logger.info(f"Scheduler status for {collection_id}: {scheduler_status}")
+                
+                if scheduler_status:
+                    # Return real-time scheduler status
+                    return jsonify({
+                        'success': True,
+                        'collection_id': collection_id,
+                        'auto_update': scheduler_status.get('is_running', False),
+                        'update_interval': scheduler_status.get('interval', '24h'),
+                        'last_run': scheduler_status.get('last_run'),
+                        'next_run': scheduler_status.get('next_run')
+                    })
+                else:
+                    # Fallback to database status if scheduler not found
+                    self.logger.info(f"No scheduler status found for {collection_id}, using database fallback")
+                    collection_details = self.data_collection_manager.get_collection_details(collection_id)
+                    self.logger.info(f"Database collection details for {collection_id}: {collection_details}")
+                    
+                    if collection_details:
+                        return jsonify({
+                            'success': True,
+                            'collection_id': collection_id,
+                            'auto_update': collection_details.get('auto_update', False),
+                            'update_interval': collection_details.get('update_interval', '24h'),
+                            'last_run': collection_details.get('last_run'),
+                            'next_run': collection_details.get('next_run')
+                        })
+                    else:
+                        return jsonify({
+                            'success': False,
+                            'message': f'Collection {collection_id} not found'
+                        }), 404
+            except Exception as e:
+                return jsonify({
+                    'success': False,
+                    'message': f'Error getting scheduler status: {str(e)}'
+                }), 500
+        
+        @self.app.route('/api/data-collection/scheduler/status', methods=['GET'])
+        def get_all_scheduler_status():
+            """Get status of all collection schedulers."""
+            try:
+                # Initialize scheduler if not already done
+                if not hasattr(self, 'data_scheduler'):
+                    from ..data_collection.scheduler import DataCollectionScheduler
+                    self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
+                
+                status_list = self.data_scheduler.get_all_scheduler_status()
+                
+                return jsonify({
+                    'success': True,
+                    'schedulers': status_list,
+                    'total_schedulers': len(status_list)
+                })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting all scheduler status: {e}")
+                return jsonify({'error': str(e)}), 500
+        
+        @self.app.route('/api/data-collection/scheduler/intervals', methods=['GET'])
+        def get_scheduler_intervals():
+            """Get available scheduler intervals."""
+            try:
+                # Initialize scheduler if not already done
+                if not hasattr(self, 'data_scheduler'):
+                    from ..data_collection.scheduler import DataCollectionScheduler
+                    self.data_scheduler = DataCollectionScheduler(self.data_collection_manager)
+                
+                return jsonify({
+                    'success': True,
+                    'intervals': self.data_scheduler.get_available_intervals()
+                })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting scheduler intervals: {e}")
                 return jsonify({'error': str(e)}), 500
     
     def _run_simplified_historical_backtest(self, strategy, profile, start_date, end_date, benchmark):

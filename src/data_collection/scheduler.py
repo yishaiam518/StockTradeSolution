@@ -1,172 +1,307 @@
+#!/usr/bin/env python3
 """
-Data Scheduler for the SMART STOCK TRADING SYSTEM.
-
-Handles:
-- Scheduled daily data updates
-- Real-time position monitoring
-- Automated data collection tasks
+Data Collection Scheduler
+Handles automated updates for data collections.
 """
 
-import schedule
-import time
-import threading
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Callable
 import logging
+import schedule
+import threading
+import time
+from datetime import datetime
+from typing import Dict, List, Optional
+from .data_manager import DataCollectionManager
 
-from src.utils.logger import logger
-from .collector import DataCollector
 
-
-class DataScheduler:
-    """Scheduler for automated data collection tasks."""
+class CollectionScheduler:
+    """Individual scheduler for a specific collection."""
     
-    def __init__(self, collector: Optional[DataCollector] = None):
-        """Initialize the data scheduler."""
-        self.collector = collector or DataCollector()
-        self.running = False
+    def __init__(self, collection_id: str, data_manager: DataCollectionManager):
+        self.collection_id = collection_id
+        self.data_manager = data_manager
+        self.logger = logging.getLogger(__name__)
         self.scheduler_thread = None
-        self.callbacks = {
-            'daily_update': [],
-            'realtime_update': [],
-            'error': []
+        self.is_running = False
+        
+        # Get interval from database or default to 24h
+        collection_details = data_manager.get_collection_details(collection_id)
+        if collection_details and collection_details.get('auto_update'):
+            # Try to get interval from database, default to 24h
+            self.update_interval = collection_details.get('update_interval', '24h')
+        else:
+            self.update_interval = "24h"  # Default interval
+        
+        # Available intervals for testing
+        self.available_intervals = {
+            "1min": "1 minute",
+            "5min": "5 minutes",
+            "10min": "10 minutes", 
+            "30min": "30 minutes",
+            "1h": "1 hour",
+            "24h": "24 hours"
         }
         
-        logger.info("Data Scheduler initialized")
+        # Track last run and next run times
+        self.last_run = None
+        self.next_run = None
     
-    def start(self):
-        """Start the scheduler."""
-        if self.running:
-            logger.warning("Scheduler is already running")
-            return
+    def set_update_interval(self, interval: str) -> bool:
+        """Set the update interval for this collection."""
+        if interval in self.available_intervals:
+            self.update_interval = interval
+            self.logger.info(f"Collection {self.collection_id} interval set to: {self.available_intervals[interval]}")
+            return True
+        else:
+            self.logger.error(f"Invalid interval: {interval}. Available: {list(self.available_intervals.keys())}")
+            return False
+    
+    def get_available_intervals(self):
+        """Get list of available intervals."""
+        return self.available_intervals
+    
+    def get_current_interval(self):
+        """Get current update interval."""
+        return self.update_interval
+    
+    def start_scheduler(self):
+        """Start the scheduler for this collection."""
+        if self.is_running:
+            self.logger.warning(f"Scheduler for collection {self.collection_id} is already running")
+            return False
         
-        self.running = True
+        # Set initial last_run time when scheduler starts
+        from datetime import datetime
+        self.last_run = datetime.now()
         
-        # Schedule daily updates at market close (4:00 PM ET)
-        schedule.every().day.at("16:00").do(self._daily_update_task)
-        
-        # Schedule real-time updates every 5 minutes during market hours
-        schedule.every(5).minutes.do(self._realtime_update_task)
-        
-        # Start scheduler in a separate thread
+        self.is_running = True
         self.scheduler_thread = threading.Thread(target=self._run_scheduler, daemon=True)
         self.scheduler_thread.start()
-        
-        logger.info("Data Scheduler started")
+        self.logger.info(f"Started scheduler for collection {self.collection_id}")
+        return True
     
-    def stop(self):
-        """Stop the scheduler."""
-        if not self.running:
-            logger.warning("Scheduler is not running")
-            return
-        
-        self.running = False
-        schedule.clear()
-        
-        if self.scheduler_thread and self.scheduler_thread.is_alive():
+    def stop_scheduler(self):
+        """Stop the scheduler for this collection."""
+        self.is_running = False
+        if self.scheduler_thread:
             self.scheduler_thread.join(timeout=5)
-        
-        logger.info("Data Scheduler stopped")
+        self.logger.info(f"Stopped scheduler for collection {self.collection_id}")
     
     def _run_scheduler(self):
-        """Run the scheduler loop."""
-        while self.running:
-            try:
-                schedule.run_pending()
-                time.sleep(60)  # Check every minute
-            except Exception as e:
-                logger.error(f"Error in scheduler loop: {str(e)}")
-                self._notify_callbacks('error', str(e))
+        """Run the scheduler loop for this collection."""
+        # Clear any existing schedules
+        schedule.clear()
+        
+        # Calculate next run time based on interval
+        self._calculate_next_run()
+        
+        # Schedule based on the current interval
+        if self.update_interval == "1min":
+            schedule.every(1).minutes.do(self._update_collection)
+        elif self.update_interval == "5min":
+            schedule.every(5).minutes.do(self._update_collection)
+        elif self.update_interval == "10min":
+            schedule.every(10).minutes.do(self._update_collection)
+        elif self.update_interval == "30min":
+            schedule.every(30).minutes.do(self._update_collection)
+        elif self.update_interval == "1h":
+            schedule.every().hour.do(self._update_collection)
+        elif self.update_interval == "24h":
+            schedule.every().day.at("18:00").do(self._update_collection)
+        
+        self.logger.info(f"Collection {self.collection_id} scheduler configured with interval: {self.available_intervals[self.update_interval]}")
+        
+        while self.is_running:
+            schedule.run_pending()
+            time.sleep(60)  # Check every minute
+            # Don't recalculate next run time here - it should only be calculated once at start
     
-    def _daily_update_task(self):
-        """Daily data update task."""
-        try:
-            logger.info("Starting scheduled daily data update")
-            
-            # Get active positions for real-time monitoring
-            active_positions = self._get_active_positions()
-            
-            # Update all data
-            updated_data = self.collector.update_daily_data()
-            
-            # Update real-time data for active positions
-            if active_positions:
-                realtime_data = self.collector.get_realtime_data(active_positions)
-            
-            logger.info(f"Daily update completed. Updated {len(updated_data)} symbols")
-            self._notify_callbacks('daily_update', updated_data)
-            
-        except Exception as e:
-            logger.error(f"Error in daily update task: {str(e)}")
-            self._notify_callbacks('error', str(e))
-    
-    def _realtime_update_task(self):
-        """Real-time update task for active positions."""
-        try:
-            # Only run during market hours
-            if not self._is_market_hours():
-                return
-            
-            active_positions = self._get_active_positions()
-            
-            if active_positions:
-                logger.debug(f"Updating real-time data for {len(active_positions)} active positions")
-                realtime_data = self.collector.get_realtime_data(active_positions)
-                self._notify_callbacks('realtime_update', realtime_data)
-            
-        except Exception as e:
-            logger.error(f"Error in real-time update task: {str(e)}")
-            self._notify_callbacks('error', str(e))
-    
-    def _get_active_positions(self) -> List[str]:
-        """Get list of active positions for real-time monitoring."""
-        # This would typically come from the portfolio manager
-        # For now, return an empty list
-        return []
-    
-    def _is_market_hours(self) -> bool:
-        """Check if it's currently market hours."""
+    def _calculate_next_run(self):
+        """Calculate the next run time based on current interval."""
+        from datetime import datetime, timedelta
+        
         now = datetime.now()
         
-        # Simple check for market hours (9:30 AM - 4:00 PM ET)
-        # In production, this should use proper timezone handling
-        market_start = now.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_end = now.replace(hour=16, minute=0, second=0, microsecond=0)
+        if self.update_interval == "1min":
+            # Next run in 1 minute from now
+            self.next_run = now + timedelta(minutes=1)
+        elif self.update_interval == "5min":
+            # Next run in 5 minutes from now
+            self.next_run = now + timedelta(minutes=5)
+        elif self.update_interval == "10min":
+            self.next_run = now + timedelta(minutes=10)
+        elif self.update_interval == "30min":
+            self.next_run = now + timedelta(minutes=30)
+        elif self.update_interval == "1h":
+            self.next_run = now + timedelta(hours=1)
+        elif self.update_interval == "24h":
+            # Next run at 18:00 today or tomorrow
+            next_run = now.replace(hour=18, minute=0, second=0, microsecond=0)
+            if next_run <= now:
+                next_run += timedelta(days=1)
+            self.next_run = next_run
+    
+    def _update_collection(self):
+        """Update this specific collection."""
+        try:
+            self.logger.info(f"Running scheduled update for collection {self.collection_id}")
+            self.last_run = datetime.now()
+            
+            result = self.data_manager.update_collection(self.collection_id)
+            
+            if result.get('success'):
+                self.logger.info(f"Collection {self.collection_id} updated successfully: {result.get('updated_symbols', 0)} symbols updated")
+                # Store result for status reporting
+                self.last_result = {
+                    'success': True,
+                    'updated_symbols': result.get('updated_symbols', 0),
+                    'failed_symbols': result.get('failed_symbols', 0),
+                    'timestamp': self.last_run.isoformat()
+                }
+            else:
+                self.logger.error(f"Failed to update collection {self.collection_id}: {result.get('error', 'Unknown error')}")
+                self.last_result = {
+                    'success': False,
+                    'error': result.get('error', 'Unknown error'),
+                    'timestamp': self.last_run.isoformat()
+                }
+            
+            # Update the database with new last_run and next_run times
+            self._update_database_times()
+                
+        except Exception as e:
+            self.logger.error(f"Error updating collection {self.collection_id}: {e}")
+            self.last_run = datetime.now()
+            self.last_result = {
+                'success': False,
+                'error': str(e),
+                'timestamp': self.last_run.isoformat()
+            }
+            # Still update database times even if update failed
+            self._update_database_times()
+    
+    def _update_database_times(self):
+        """Update the database with current last_run and next_run times."""
+        try:
+            from datetime import datetime, timedelta
+            
+            # Calculate next run time
+            now = datetime.now()
+            if self.update_interval == "1min":
+                next_run = now + timedelta(minutes=1)
+            elif self.update_interval == "5min":
+                next_run = now + timedelta(minutes=5)
+            elif self.update_interval == "10min":
+                next_run = now + timedelta(minutes=10)
+            elif self.update_interval == "30min":
+                next_run = now + timedelta(minutes=30)
+            elif self.update_interval == "1h":
+                next_run = now + timedelta(hours=1)
+            elif self.update_interval == "24h":
+                next_run = now + timedelta(hours=24)
+            else:
+                next_run = now + timedelta(hours=24)
+            
+            # Update the database
+            self.data_manager.enable_auto_update(
+                self.collection_id,
+                True,
+                self.update_interval,
+                self.last_run.isoformat(),
+                next_run.isoformat()
+            )
+            
+            self.next_run = next_run
+            self.logger.info(f"Updated database times for collection {self.collection_id}: last_run={self.last_run.isoformat()}, next_run={next_run.isoformat()}")
+            
+        except Exception as e:
+            self.logger.error(f"Error updating database times for collection {self.collection_id}: {e}")
+    
+    def get_status(self) -> Dict:
+        """Get the current status of this scheduler."""
+        from datetime import datetime
         
-        return market_start <= now <= market_end
+        status = {
+            'collection_id': self.collection_id,
+            'is_running': self.is_running,
+            'interval': self.update_interval,
+            'interval_description': self.available_intervals.get(self.update_interval, 'Unknown')
+        }
+        
+        # Add next run time if scheduler is running
+        if self.is_running and self.next_run:
+            status['next_run'] = self.next_run.isoformat()
+            status['next_run_formatted'] = self.next_run.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Add last run time and results if available
+        if hasattr(self, 'last_run') and self.last_run:
+            status['last_run'] = self.last_run.isoformat()
+            status['last_run_formatted'] = self.last_run.strftime('%Y-%m-%d %H:%M:%S')
+        
+        if hasattr(self, 'last_result') and self.last_result:
+            status['last_result'] = self.last_result
+        
+        return status
+
+
+class DataCollectionScheduler:
+    """Manager for multiple collection-specific schedulers."""
     
-    def add_callback(self, event_type: str, callback: Callable):
-        """Add a callback for scheduler events."""
-        if event_type in self.callbacks:
-            self.callbacks[event_type].append(callback)
-            logger.debug(f"Added callback for {event_type}")
-        else:
-            logger.warning(f"Unknown event type: {event_type}")
+    def __init__(self, data_manager: DataCollectionManager):
+        self.logger = logging.getLogger(__name__)
+        self.data_manager = data_manager
+        self.collection_schedulers: Dict[str, CollectionScheduler] = {}
     
-    def _notify_callbacks(self, event_type: str, data):
-        """Notify all callbacks for an event."""
-        if event_type in self.callbacks:
-            for callback in self.callbacks[event_type]:
-                try:
-                    callback(data)
-                except Exception as e:
-                    logger.error(f"Error in callback for {event_type}: {str(e)}")
+    def get_or_create_scheduler(self, collection_id: str) -> CollectionScheduler:
+        """Get existing scheduler or create new one for collection."""
+        if collection_id not in self.collection_schedulers:
+            self.collection_schedulers[collection_id] = CollectionScheduler(collection_id, self.data_manager)
+        return self.collection_schedulers[collection_id]
     
-    def get_scheduler_status(self) -> Dict:
-        """Get the current status of the scheduler."""
+    def start_collection_scheduler(self, collection_id: str) -> bool:
+        """Start scheduler for a specific collection."""
+        scheduler = self.get_or_create_scheduler(collection_id)
+        return scheduler.start_scheduler()
+    
+    def stop_collection_scheduler(self, collection_id: str) -> bool:
+        """Stop scheduler for a specific collection."""
+        if collection_id in self.collection_schedulers:
+            scheduler = self.collection_schedulers[collection_id]
+            scheduler.stop_scheduler()
+            return True
+        return False
+    
+    def set_collection_interval(self, collection_id: str, interval: str) -> bool:
+        """Set update interval for a specific collection."""
+        scheduler = self.get_or_create_scheduler(collection_id)
+        return scheduler.set_update_interval(interval)
+    
+    def get_collection_status(self, collection_id: str) -> Optional[Dict]:
+        """Get status of a specific collection scheduler."""
+        if collection_id in self.collection_schedulers:
+            return self.collection_schedulers[collection_id].get_status()
+        return None
+    
+    def get_all_scheduler_status(self) -> List[Dict]:
+        """Get status of all collection schedulers."""
+        status_list = []
+        for collection_id, scheduler in self.collection_schedulers.items():
+            status = scheduler.get_status()
+            status_list.append(status)
+        return status_list
+    
+    def get_available_intervals(self):
+        """Get available intervals (same for all schedulers)."""
+        if self.collection_schedulers:
+            return list(self.collection_schedulers.values())[0].get_available_intervals()
         return {
-            'running': self.running,
-            'next_daily_update': schedule.next_run(),
-            'active_positions': self._get_active_positions(),
-            'market_hours': self._is_market_hours()
+            "5min": "5 minutes",
+            "10min": "10 minutes", 
+            "30min": "30 minutes",
+            "1h": "1 hour",
+            "24h": "24 hours"
         }
     
-    def manual_daily_update(self):
-        """Manually trigger a daily update."""
-        logger.info("Manual daily update triggered")
-        self._daily_update_task()
-    
-    def manual_realtime_update(self):
-        """Manually trigger a real-time update."""
-        logger.info("Manual real-time update triggered")
-        self._realtime_update_task() 
+    def stop_all_schedulers(self):
+        """Stop all collection schedulers."""
+        for collection_id in list(self.collection_schedulers.keys()):
+            self.stop_collection_scheduler(collection_id) 

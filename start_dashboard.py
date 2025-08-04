@@ -5,16 +5,16 @@ Start the StockTradeSolution Web Dashboard
 
 import sys
 import os
-import webbrowser
-import time
-from threading import Timer
+# import webbrowser
+# import time
+# from threading import Timer
 
 # Add src to path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
 
-def open_browser():
-    """Open the dashboard in the browser"""
-    webbrowser.open('http://localhost:8080')
+# def open_browser():
+#     """Open the dashboard in the browser"""
+#     webbrowser.open('http://localhost:8080')
 
 def main():
     """Start the dashboard"""
@@ -33,9 +33,9 @@ def main():
         print("=" * 50)
         
         # Open browser after 2 seconds
-        Timer(2.0, open_browser).start()
+        # Timer(2.0, open_browser).start()
         
-        print("🌐 Opening dashboard in browser...")
+        # print("🌐 Opening dashboard in browser...")
         print("🔗 URL: http://localhost:8080")
         print("⏹️  Press Ctrl+C to stop the dashboard")
         print("=" * 50)
