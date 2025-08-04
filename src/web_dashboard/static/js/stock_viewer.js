@@ -37,29 +37,39 @@ class StockViewer {
             return;
         }
         
+        // Initialize event listeners first
+        this.initializeEventListeners();
+        
         // Load collection details
         this.loadCollectionDetails();
         
         // Load stock list
         this.loadStockList();
         
-        // Initialize event listeners
-        this.initializeEventListeners();
-        
         console.log('StockViewer initialization complete');
     }
 
     initializeEventListeners() {
+        console.log('Initializing event listeners...');
+        
         // Add event listener for search input
         const searchInput = document.getElementById('stockSearch');
+        console.log('Search input element:', searchInput);
         if (searchInput) {
             searchInput.addEventListener('input', () => this.filterStocks());
+            console.log('Search input event listener added');
+        } else {
+            console.error('Search input element not found!');
         }
         
         // Add event listener for dropdown button
         const dropdownButton = document.getElementById('dropdownButton');
+        console.log('Dropdown button element:', dropdownButton);
         if (dropdownButton) {
             dropdownButton.addEventListener('click', () => this.toggleDropdown());
+            console.log('Dropdown button event listener added');
+        } else {
+            console.error('Dropdown button element not found!');
         }
         
         // Add event listeners for chart type buttons
@@ -255,9 +265,12 @@ class StockViewer {
     }
 
     toggleDropdown() {
+        console.log('toggleDropdown called');
         const dropdown = document.getElementById('stockDropdown');
         const dropdownButton = document.getElementById('dropdownButton');
         const searchInput = document.getElementById('stockSearch');
+        
+        console.log('Dropdown elements:', { dropdown, dropdownButton, searchInput });
         
         if (!dropdown || !dropdownButton || !searchInput) {
             console.error('Dropdown elements not found');
@@ -291,9 +304,12 @@ class StockViewer {
     }
 
     filterStocks() {
+        console.log('filterStocks called');
         const searchInput = document.getElementById('stockSearch');
         const dropdown = document.getElementById('stockDropdown');
         const dropdownButton = document.getElementById('dropdownButton');
+        
+        console.log('Filter elements:', { searchInput, dropdown, dropdownButton });
         
         if (!searchInput || !dropdown || !dropdownButton) {
             console.error('Search elements not found');
