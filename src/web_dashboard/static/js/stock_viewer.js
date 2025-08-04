@@ -12,6 +12,9 @@ class StockViewer {
         this.stockList = [];
         
         console.log('StockViewer created:', this);
+        
+        // Initialize immediately
+        this.initialize();
     }
 
     initialize() {
