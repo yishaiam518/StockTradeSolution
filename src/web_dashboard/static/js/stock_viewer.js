@@ -501,6 +501,12 @@ class StockViewer {
             case 'ohlc':
                 this.createOHLCChart(data);
                 break;
+            case 'volume':
+                this.createVolumeChart(data);
+                break;
+            case 'combined':
+                this.createCombinedChart(data);
+                break;
             default:
                 this.createLineChart(data);
         }
@@ -539,7 +545,7 @@ class StockViewer {
                 },
                 tooltip: {
                     enable: true,
-                    format: '${point.x} : ${point.y}'
+                    format: '${point.x} : $${point.y}'
                 },
                 series: [{
                     dataSource: chartData,
@@ -604,6 +610,10 @@ class StockViewer {
                     width: 0
                 }
             },
+            tooltip: {
+                enable: true,
+                format: '${point.x} : O:${point.open} H:${point.high} L:${point.low} C:${point.close}'
+            },
             series: [{
                 dataSource: chartData,
                 xName: 'date',
@@ -663,6 +673,10 @@ class StockViewer {
                     width: 0
                 }
             },
+            tooltip: {
+                enable: true,
+                format: '${point.x} : O:${point.open} H:${point.high} L:${point.low} C:${point.close}'
+            },
             series: [{
                 dataSource: chartData,
                 xName: 'date',
@@ -673,6 +687,127 @@ class StockViewer {
                 type: 'HiloOpenClose',
                 name: 'Price'
             }],
+            width: '100%',
+            height: '600px'
+        });
+        
+        chart.appendTo(chartContainer);
+    }
+
+    createVolumeChart(data) {
+        // Set license key before creating volume chart
+        this.setLicenseKey();
+        
+        // Filter data based on timeframe
+        const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
+        
+        // Transform data for Syncfusion
+        const chartData = filteredData.map(d => ({
+            date: new Date(d.Date),
+            volume: d.Volume
+        }));
+        
+        const chartContainer = document.getElementById('chartContainer');
+        
+        // Create volume chart using Syncfusion
+        const chart = new ej.charts.Chart({
+            primaryXAxis: {
+                valueType: 'DateTime',
+                majorGridLines: { width: 0 }
+            },
+            primaryYAxis: {
+                labelFormat: '{value}',
+                majorTickLines: { width: 0 },
+                lineStyle: { width: 0 }
+            },
+            chartArea: {
+                border: {
+                    width: 0
+                }
+            },
+            tooltip: {
+                enable: true,
+                format: '${point.x} : Volume: ${point.y}'
+            },
+            series: [{
+                dataSource: chartData,
+                xName: 'date',
+                yName: 'volume',
+                type: 'Column',
+                name: 'Volume',
+                fill: '#4CAF50',
+                opacity: 0.7
+            }],
+            width: '100%',
+            height: '400px'
+        });
+        
+        chart.appendTo(chartContainer);
+    }
+
+    createCombinedChart(data) {
+        // Set license key before creating combined chart
+        this.setLicenseKey();
+        
+        // Filter data based on timeframe
+        const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
+        
+        // Transform data for Syncfusion
+        const chartData = filteredData.map(d => ({
+            date: new Date(d.Date),
+            close: d.Close,
+            volume: d.Volume
+        }));
+        
+        const chartContainer = document.getElementById('chartContainer');
+        
+        // Create combined chart with price and volume
+        const chart = new ej.charts.Chart({
+            primaryXAxis: {
+                valueType: 'DateTime',
+                majorGridLines: { width: 0 }
+            },
+            primaryYAxis: {
+                labelFormat: '${value}',
+                majorTickLines: { width: 0 },
+                lineStyle: { width: 0 }
+            },
+            axes: [{
+                name: 'secondary',
+                opposedPosition: true,
+                majorTickLines: { width: 0 },
+                lineStyle: { width: 0 }
+            }],
+            chartArea: {
+                border: {
+                    width: 0
+                }
+            },
+            tooltip: {
+                enable: true,
+                format: '${point.x} : Price: $${point.y}'
+            },
+            series: [
+                {
+                    dataSource: chartData,
+                    xName: 'date',
+                    yName: 'close',
+                    type: 'Line',
+                    name: 'Price',
+                    fill: '#0066FF',
+                    border: { width: 2, color: '#0066FF' }
+                },
+                {
+                    dataSource: chartData,
+                    xName: 'date',
+                    yName: 'volume',
+                    type: 'Column',
+                    name: 'Volume',
+                    yAxisName: 'secondary',
+                    fill: '#4CAF50',
+                    opacity: 0.3
+                }
+            ],
             width: '100%',
             height: '600px'
         });
