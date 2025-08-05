@@ -1,81 +1,67 @@
 """
-Backtesting Engine - Core backtesting functionality
+Enhanced Backtesting Engine with Performance Analytics and Risk Management
 """
 
 import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
-from dataclasses import dataclass
-from enum import Enum
+from typing import Dict, Any, List, Optional
 import logging
+from dataclasses import dataclass
+from datetime import datetime
+import time
 
-from ..data_collection.data_manager import DataCollectionManager
-from ..indicators import indicator_manager
+from .performance_analytics import PerformanceAnalytics, PerformanceMetrics
+from .risk_management import RiskManager, RiskParameters, PositionSizingMethod, StopLossType
 
-logger = logging.getLogger(__name__)
-
-class PositionType(Enum):
-    """Position types"""
+@dataclass
+class PositionType:
+    """Position type enumeration"""
     LONG = "long"
     SHORT = "short"
 
-class OrderType(Enum):
-    """Order types"""
-    BUY = "buy"
-    SELL = "sell"
+@dataclass
+class OrderType:
+    """Order type enumeration"""
+    MARKET = "market"
+    LIMIT = "limit"
+    STOP = "stop"
 
 @dataclass
 class Trade:
-    """Represents a single trade"""
+    """Trade information"""
     symbol: str
-    entry_date: datetime
-    exit_date: Optional[datetime]
+    entry_time: datetime
+    exit_time: datetime
     entry_price: float
-    exit_price: Optional[float]
-    quantity: float
-    position_type: PositionType
-    pnl: Optional[float] = None
-    pnl_percent: Optional[float] = None
-    
-    def __post_init__(self):
-        if self.exit_price and self.entry_price:
-            if self.position_type == PositionType.LONG:
-                self.pnl = (self.exit_price - self.entry_price) * self.quantity
-                self.pnl_percent = ((self.exit_price - self.entry_price) / self.entry_price) * 100
-            else:  # SHORT
-                self.pnl = (self.entry_price - self.exit_price) * self.quantity
-                self.pnl_percent = ((self.entry_price - self.exit_price) / self.entry_price) * 100
+    exit_price: float
+    position_type: str
+    shares: float
+    pnl: float
+    pnl_percentage: float
+    stop_loss: float
+    take_profit: float
+    exit_reason: str
 
 @dataclass
 class Position:
-    """Represents an open position"""
+    """Position information"""
     symbol: str
-    entry_date: datetime
+    position_type: str
+    shares: float
     entry_price: float
-    quantity: float
-    position_type: PositionType
-    current_price: float = 0.0
-    unrealized_pnl: float = 0.0
-    unrealized_pnl_percent: float = 0.0
-    
-    def update_price(self, price: float):
-        """Update position with current price"""
-        self.current_price = price
-        if self.position_type == PositionType.LONG:
-            self.unrealized_pnl = (price - self.entry_price) * self.quantity
-            self.unrealized_pnl_percent = ((price - self.entry_price) / self.entry_price) * 100
-        else:  # SHORT
-            self.unrealized_pnl = (self.entry_price - price) * self.quantity
-            self.unrealized_pnl_percent = ((self.entry_price - price) / self.entry_price) * 100
+    entry_time: datetime
+    current_price: float
+    unrealized_pnl: float
+    stop_loss: float
+    take_profit: float
 
 class Strategy:
     """Abstract base class for trading strategies"""
     
-    def __init__(self, name: str, parameters: Dict[str, Any] = None):
+    def __init__(self, name: str, parameters: Dict[str, Any]):
         self.name = name
-        self.parameters = parameters or {}
-        self.logger = logging.getLogger(f"{__name__}.{name}")
+        self.parameters = parameters
+        self.logger = logging.getLogger(__name__)
     
     def should_enter_long(self, data: pd.DataFrame, index: int) -> bool:
         """Check if should enter long position"""
@@ -95,20 +81,37 @@ class Strategy:
     
     def get_position_size(self, data: pd.DataFrame, index: int, capital: float) -> float:
         """Calculate position size"""
-        return capital * 0.1  # Default to 10% of capital
+        return capital * self.parameters.get('position_size', 0.1)
 
 class BacktestEngine:
-    """Main backtesting engine"""
+    """Enhanced backtesting engine with performance analytics and risk management"""
     
-    def __init__(self, initial_capital: float = 100000.0):
+    def __init__(self, initial_capital: float = 100000.0, risk_params: Optional[RiskParameters] = None):
         self.initial_capital = initial_capital
         self.capital = initial_capital
         self.positions: Dict[str, Position] = {}
         self.trades: List[Trade] = []
         self.equity_curve: List[float] = []
-        self.data_manager = DataCollectionManager()
-        self.logger = logging.getLogger(__name__)
+        self.timestamps: List[datetime] = []
         
+        # Performance analytics
+        self.performance_analytics = PerformanceAnalytics()
+        
+        # Risk management
+        if risk_params is None:
+            risk_params = RiskParameters(
+                position_sizing_method=PositionSizingMethod.FIXED_PERCENTAGE,
+                stop_loss_type=StopLossType.FIXED_PERCENTAGE
+            )
+        self.risk_manager = RiskManager(risk_params)
+        
+        # Data management
+        from ..data_collection.data_manager import DataCollectionManager
+        self.data_manager = DataCollectionManager()
+        
+        self.logger = logging.getLogger(__name__)
+        self.logger.info("Enhanced Backtest Engine initialized with performance analytics and risk management")
+    
     def load_data(self, collection_id: str, symbol: str) -> pd.DataFrame:
         """Load historical data with indicators"""
         try:
@@ -129,228 +132,365 @@ class BacktestEngine:
             
             # Ensure we have required columns
             required_columns = ['Date', 'close']
-            if not all(col in data.columns for col in required_columns):
-                self.logger.error(f"Missing required columns. Available: {data.columns}")
-                return pd.DataFrame()
+            for col in required_columns:
+                if col not in data.columns:
+                    self.logger.error(f"Missing required column: {col}")
+                    return pd.DataFrame()
             
-            # Convert Date to datetime if needed
-            if 'Date' in data.columns:
-                data['Date'] = pd.to_datetime(data['Date'])
-                data = data.sort_values('Date').reset_index(drop=True)
-            
-            self.logger.info(f"Loaded {len(data)} data points for {symbol}")
             return data
             
         except Exception as e:
-            self.logger.error(f"Error loading data for {symbol}: {e}")
+            self.logger.error(f"Error loading data: {e}")
             return pd.DataFrame()
     
-    def run_backtest(self, strategy: Strategy, collection_id: str, symbol: str, 
-                    start_date: Optional[str] = None, end_date: Optional[str] = None) -> Dict[str, Any]:
-        """Run backtest for a strategy"""
-        self.logger.info(f"Starting backtest for {strategy.name} on {symbol}")
+    def run_backtest(self, 
+                    strategy: Strategy,
+                    collection_id: str,
+                    symbol: str,
+                    start_date: Optional[str] = None,
+                    end_date: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Run backtest with enhanced performance analytics and risk management
         
-        # Reset state
-        self.capital = self.initial_capital
-        self.positions = {}
-        self.trades = []
-        self.equity_curve = []
-        
-        # Load data
-        data = self.load_data(collection_id, symbol)
-        if data.empty:
-            return {"error": "No data available"}
-        
-        # Filter by date range if specified
-        if start_date:
-            data = data[data['Date'] >= pd.to_datetime(start_date)]
-        if end_date:
-            data = data[data['Date'] <= pd.to_datetime(end_date)]
-        
-        if data.empty:
-            return {"error": "No data in specified date range"}
-        
-        self.logger.info(f"Running backtest on {len(data)} data points")
-        
-        # Run backtest
-        for i in range(len(data)):
-            current_data = data.iloc[:i+1]  # Data up to current point
-            current_row = data.iloc[i]
+        Args:
+            strategy: Trading strategy to test
+            collection_id: Data collection ID
+            symbol: Symbol to trade
+            start_date: Start date for backtest
+            end_date: End date for backtest
             
-            # Update equity curve
-            self._update_equity_curve(current_row)
+        Returns:
+            Dictionary with backtest results and performance metrics
+        """
+        try:
+            # Load data
+            data = self.load_data(collection_id, symbol)
+            if data.empty:
+                return {"error": "No data available for backtest"}
             
-            # Check for exit signals first
-            self._check_exit_signals(strategy, current_data, i, current_row)
+            # Filter by date range
+            if start_date:
+                data = data[data['Date'] >= start_date]
+            if end_date:
+                data = data[data['Date'] <= end_date]
             
-            # Check for entry signals
-            self._check_entry_signals(strategy, current_data, i, current_row)
-        
-        # Close any remaining positions
-        self._close_all_positions(data.iloc[-1])
-        
-        # Calculate performance metrics
-        performance = self._calculate_performance()
-        
-        return {
-            "success": True,
-            "strategy": strategy.name,
-            "symbol": symbol,
-            "initial_capital": self.initial_capital,
-            "final_capital": self.capital,
-            "total_return": ((self.capital - self.initial_capital) / self.initial_capital) * 100,
-            "trades": len(self.trades),
-            "performance": performance,
-            "equity_curve": self.equity_curve
-        }
+            if data.empty:
+                return {"error": "No data in specified date range"}
+            
+            self.logger.info(f"Running backtest on {len(data)} data points")
+            
+            # Reset state
+            self.capital = self.initial_capital
+            self.positions = {}
+            self.trades = []
+            self.equity_curve = [self.initial_capital]
+            self.timestamps = [data.iloc[0]['Date']]
+            
+            # Run simulation
+            for i in range(len(data)):
+                current_row = data.iloc[i]
+                current_time = current_row['Date']
+                current_price = current_row['close']
+                
+                # Update equity curve
+                self._update_equity_curve(current_price, current_time)
+                
+                # Check for exit signals (risk management)
+                self._check_exit_signals(strategy, data, i, current_row)
+                
+                # Check for entry signals
+                self._check_entry_signals(strategy, data, i, current_row)
+                
+                # Update position values
+                self._update_positions(current_price, current_time)
+            
+            # Close any remaining positions
+            self._close_all_positions(data.iloc[-1]['close'], data.iloc[-1]['Date'])
+            
+            # Calculate performance metrics
+            equity_series = pd.Series(self.equity_curve, index=self.timestamps)
+            performance_metrics = self.performance_analytics.calculate_performance_metrics(
+                equity_series, self.trades
+            )
+            
+            # Generate results
+            results = {
+                "strategy": strategy.name,
+                "symbol": symbol,
+                "initial_capital": self.initial_capital,
+                "final_capital": self.capital,
+                "total_return": performance_metrics.total_return,
+                "trades": len(self.trades),
+                "performance": {
+                    "sharpe_ratio": performance_metrics.sharpe_ratio,
+                    "sortino_ratio": performance_metrics.sortino_ratio,
+                    "calmar_ratio": performance_metrics.calmar_ratio,
+                    "max_drawdown": performance_metrics.max_drawdown,
+                    "win_rate": performance_metrics.win_rate,
+                    "profit_factor": performance_metrics.profit_factor,
+                    "volatility": performance_metrics.volatility,
+                    "information_ratio": performance_metrics.information_ratio,
+                    "omega_ratio": performance_metrics.omega_ratio,
+                    "treynor_ratio": performance_metrics.treynor_ratio,
+                    "var_95": performance_metrics.var_95,
+                    "cvar_95": performance_metrics.cvar_95,
+                    "winning_trades": performance_metrics.winning_trades,
+                    "losing_trades": performance_metrics.losing_trades,
+                    "average_win": performance_metrics.average_win,
+                    "average_loss": performance_metrics.average_loss,
+                    "largest_win": performance_metrics.largest_win,
+                    "largest_loss": performance_metrics.largest_loss,
+                    "best_month": performance_metrics.best_month,
+                    "worst_month": performance_metrics.worst_month,
+                    "positive_months": performance_metrics.positive_months,
+                    "negative_months": performance_metrics.negative_months
+                },
+                "equity_curve": self.equity_curve,
+                "trades": self.trades,
+                "risk_summary": self.risk_manager.get_risk_summary()
+            }
+            
+            return results
+            
+        except Exception as e:
+            self.logger.error(f"Error in backtest: {e}")
+            return {"error": str(e)}
     
     def _check_entry_signals(self, strategy: Strategy, data: pd.DataFrame, index: int, current_row: pd.Series):
-        """Check for entry signals"""
+        """Check for entry signals with risk management"""
         symbol = current_row.get('symbol', 'UNKNOWN')
+        current_price = current_row['close']
+        current_time = current_row['Date']
+        
+        # Check if we can enter new positions (risk limits)
+        portfolio_ok, reason = self.risk_manager.check_portfolio_limits(
+            self.capital, self.positions
+        )
+        
+        if not portfolio_ok:
+            self.logger.info(f"Portfolio limits exceeded: {reason}")
+            return
         
         # Check for long entry
-        if strategy.should_enter_long(data, index):
-            if symbol not in self.positions:
-                position_size = strategy.get_position_size(data, index, self.capital)
-                quantity = position_size / current_row['close']
-                
-                position = Position(
-                    symbol=symbol,
-                    entry_date=current_row['Date'],
-                    entry_price=current_row['close'],
-                    quantity=quantity,
-                    position_type=PositionType.LONG
+        if symbol not in self.positions and strategy.should_enter_long(data, index):
+            # Calculate position size with risk management
+            position_size = self.risk_manager.calculate_position_size(
+                self.capital, current_price
+            )
+            
+            if position_size > 0:
+                shares = position_size / current_price
+                stop_loss = self.risk_manager.calculate_stop_loss(
+                    current_price, 'long'
                 )
-                position.update_price(current_row['close'])
+                take_profit = self.risk_manager.calculate_take_profit(
+                    current_price, 'long'
+                )
                 
-                self.positions[symbol] = position
-                self.capital -= position_size
-                self.logger.info(f"Entered LONG position: {quantity:.2f} shares at ${current_row['close']:.2f}")
+                self._enter_position(symbol, 'long', shares, current_price, 
+                                  current_time, stop_loss, take_profit)
         
         # Check for short entry
-        elif strategy.should_enter_short(data, index):
-            if symbol not in self.positions:
-                position_size = strategy.get_position_size(data, index, self.capital)
-                quantity = position_size / current_row['close']
-                
-                position = Position(
-                    symbol=symbol,
-                    entry_date=current_row['Date'],
-                    entry_price=current_row['close'],
-                    quantity=quantity,
-                    position_type=PositionType.SHORT
+        elif symbol not in self.positions and strategy.should_enter_short(data, index):
+            position_size = self.risk_manager.calculate_position_size(
+                self.capital, current_price
+            )
+            
+            if position_size > 0:
+                shares = position_size / current_price
+                stop_loss = self.risk_manager.calculate_stop_loss(
+                    current_price, 'short'
                 )
-                position.update_price(current_row['close'])
+                take_profit = self.risk_manager.calculate_take_profit(
+                    current_price, 'short'
+                )
                 
-                self.positions[symbol] = position
-                self.capital -= position_size
-                self.logger.info(f"Entered SHORT position: {quantity:.2f} shares at ${current_row['close']:.2f}")
+                self._enter_position(symbol, 'short', shares, current_price, 
+                                  current_time, stop_loss, take_profit)
     
     def _check_exit_signals(self, strategy: Strategy, data: pd.DataFrame, index: int, current_row: pd.Series):
-        """Check for exit signals"""
+        """Check for exit signals including risk management"""
         symbol = current_row.get('symbol', 'UNKNOWN')
+        current_price = current_row['close']
+        current_time = current_row['Date']
         
         if symbol in self.positions:
             position = self.positions[symbol]
-            should_exit = False
             
-            if position.position_type == PositionType.LONG and strategy.should_exit_long(data, index):
-                should_exit = True
-            elif position.position_type == PositionType.SHORT and strategy.should_exit_short(data, index):
-                should_exit = True
+            # Check risk management exits
+            should_close, reason = self.risk_manager.should_close_position(
+                {
+                    'entry_price': position.entry_price,
+                    'type': position.position_type,
+                    'stop_loss': position.stop_loss,
+                    'take_profit': position.take_profit,
+                    'entry_time': position.entry_time
+                },
+                current_price, current_time
+            )
             
-            if should_exit:
-                self._close_position(position, current_row)
+            if should_close:
+                self._close_position(symbol, current_price, current_time, reason)
+                return
+            
+            # Check strategy exit signals
+            if (position.position_type == 'long' and strategy.should_exit_long(data, index)) or \
+               (position.position_type == 'short' and strategy.should_exit_short(data, index)):
+                self._close_position(symbol, current_price, current_time, "Strategy exit")
     
-    def _close_position(self, position: Position, current_row: pd.Series):
-        """Close a position"""
-        # Create trade record
+    def _enter_position(self, symbol: str, position_type: str, shares: float, 
+                       price: float, time: datetime, stop_loss: float, take_profit: float):
+        """Enter a new position"""
+        position = Position(
+            symbol=symbol,
+            position_type=position_type,
+            shares=shares,
+            entry_price=price,
+            entry_time=time,
+            current_price=price,
+            unrealized_pnl=0,
+            stop_loss=stop_loss,
+            take_profit=take_profit
+        )
+        
+        self.positions[symbol] = position
+        self.capital -= shares * price
+        
+        self.logger.info(f"Entered {position_type.upper()} position: {shares:.2f} shares at ${price:.2f}")
+    
+    def _close_position(self, symbol: str, price: float, time: datetime, reason: str):
+        """Close an existing position"""
+        if symbol not in self.positions:
+            return
+        
+        position = self.positions[symbol]
+        
+        # Calculate P&L
+        if position.position_type == 'long':
+            pnl = (price - position.entry_price) * position.shares
+        else:  # short
+            pnl = (position.entry_price - price) * position.shares
+        
+        pnl_percentage = pnl / (position.entry_price * position.shares)
+        
+        # Update capital
+        self.capital += position.shares * price + pnl
+        
+        # Record trade
         trade = Trade(
-            symbol=position.symbol,
-            entry_date=position.entry_date,
-            exit_date=current_row['Date'],
+            symbol=symbol,
+            entry_time=position.entry_time,
+            exit_time=time,
             entry_price=position.entry_price,
-            exit_price=current_row['close'],
-            quantity=position.quantity,
-            position_type=position.position_type
+            exit_price=price,
+            position_type=position.position_type,
+            shares=position.shares,
+            pnl=pnl,
+            pnl_percentage=pnl_percentage,
+            stop_loss=position.stop_loss,
+            take_profit=position.take_profit,
+            exit_reason=reason
         )
         
         self.trades.append(trade)
+        del self.positions[symbol]
         
-        # Update capital
-        if position.position_type == PositionType.LONG:
-            self.capital += position.quantity * current_row['close']
-        else:  # SHORT
-            self.capital += (position.entry_price - current_row['close']) * position.quantity
-        
-        # Remove position
-        del self.positions[position.symbol]
-        
-        self.logger.info(f"Closed {position.position_type.value} position: P&L = ${trade.pnl:.2f} ({trade.pnl_percent:.2f}%)")
+        self.logger.info(f"Closed {position.position_type} position: P&L = ${pnl:.2f} ({pnl_percentage:.2%})")
     
-    def _close_all_positions(self, last_row: pd.Series):
+    def _close_all_positions(self, price: float, time: datetime):
         """Close all remaining positions"""
-        for symbol, position in list(self.positions.items()):
-            position.update_price(last_row['close'])
-            self._close_position(position, last_row)
+        for symbol in list(self.positions.keys()):
+            self._close_position(symbol, price, time, "End of backtest")
     
-    def _update_equity_curve(self, current_row: pd.Series):
+    def _update_positions(self, price: float, time: datetime):
+        """Update position values and trailing stops"""
+        for symbol, position in self.positions.items():
+            position.current_price = price
+            
+            # Update trailing stops
+            if position.position_type == 'long':
+                position.stop_loss = self.risk_manager.update_trailing_stop(
+                    position.stop_loss, price, 'long'
+                )
+                position.take_profit = self.risk_manager.update_trailing_profit(
+                    position.take_profit, price, 'long'
+                )
+            else:  # short
+                position.stop_loss = self.risk_manager.update_trailing_stop(
+                    position.stop_loss, price, 'short'
+                )
+                position.take_profit = self.risk_manager.update_trailing_profit(
+                    position.take_profit, price, 'short'
+                )
+            
+            # Calculate unrealized P&L
+            if position.position_type == 'long':
+                position.unrealized_pnl = (price - position.entry_price) * position.shares
+            else:  # short
+                position.unrealized_pnl = (position.entry_price - price) * position.shares
+    
+    def _update_equity_curve(self, price: float, time: datetime):
         """Update equity curve"""
-        total_value = self.capital
+        # Calculate current portfolio value
+        portfolio_value = self.capital
         
-        # Add unrealized P&L from open positions
         for position in self.positions.values():
-            position.update_price(current_row['close'])
-            total_value += position.unrealized_pnl
+            portfolio_value += position.shares * price
         
-        self.equity_curve.append(total_value)
+        self.equity_curve.append(portfolio_value)
+        self.timestamps.append(time)
     
-    def _calculate_performance(self) -> Dict[str, float]:
-        """Calculate performance metrics"""
-        if not self.trades:
-            return {
-                "total_return": 0.0,
-                "sharpe_ratio": 0.0,
-                "max_drawdown": 0.0,
-                "win_rate": 0.0,
-                "profit_factor": 0.0,
-                "total_trades": 0,
-                "winning_trades": 0,
-                "losing_trades": 0
-            }
+    def get_performance_report(self, results: Dict[str, Any]) -> str:
+        """Generate comprehensive performance report"""
+        if "error" in results:
+            return f"Backtest Error: {results['error']}"
         
-        # Basic metrics
-        total_return = ((self.capital - self.initial_capital) / self.initial_capital) * 100
-        winning_trades = [t for t in self.trades if t.pnl and t.pnl > 0]
-        losing_trades = [t for t in self.trades if t.pnl and t.pnl < 0]
-        
-        win_rate = len(winning_trades) / len(self.trades) * 100 if self.trades else 0
-        
-        # Profit factor
-        total_profit = sum(t.pnl for t in winning_trades) if winning_trades else 0
-        total_loss = abs(sum(t.pnl for t in losing_trades)) if losing_trades else 0
-        profit_factor = total_profit / total_loss if total_loss > 0 else float('inf')
-        
-        # Sharpe ratio (simplified)
-        returns = [t.pnl_percent for t in self.trades if t.pnl_percent is not None]
-        sharpe_ratio = np.mean(returns) / np.std(returns) if len(returns) > 1 and np.std(returns) > 0 else 0
-        
-        # Max drawdown
-        max_drawdown = 0
-        peak = self.initial_capital
-        for value in self.equity_curve:
-            if value > peak:
-                peak = value
-            drawdown = (peak - value) / peak * 100
-            max_drawdown = max(max_drawdown, drawdown)
-        
-        return {
-            "total_return": total_return,
-            "sharpe_ratio": sharpe_ratio,
-            "max_drawdown": max_drawdown,
-            "win_rate": win_rate,
-            "profit_factor": profit_factor,
-            "total_trades": len(self.trades),
-            "winning_trades": len(winning_trades),
-            "losing_trades": len(losing_trades)
-        } 
+        metrics = results['performance']
+        report = f"""
+ENHANCED BACKTEST RESULTS
+{'=' * 50}
+
+STRATEGY: {results['strategy']}
+SYMBOL: {results['symbol']}
+PERIOD: {self.timestamps[0]} to {self.timestamps[-1]}
+
+CAPITAL METRICS:
+Initial Capital: ${results['initial_capital']:,.2f}
+Final Capital: ${results['final_capital']:,.2f}
+Total Return: {results['total_return']:.2%}
+
+RISK-ADJUSTED METRICS:
+Sharpe Ratio: {metrics['sharpe_ratio']:.2f}
+Sortino Ratio: {metrics['sortino_ratio']:.2f}
+Calmar Ratio: {metrics['calmar_ratio']:.2f}
+Information Ratio: {metrics['information_ratio']:.2f}
+Omega Ratio: {metrics['omega_ratio']:.2f}
+Treynor Ratio: {metrics['treynor_ratio']:.2f}
+
+RISK METRICS:
+Maximum Drawdown: {metrics['max_drawdown']:.2%}
+Volatility: {metrics['volatility']:.2%}
+Value at Risk (95%): {metrics['var_95']:.2%}
+Conditional VaR (95%): {metrics['cvar_95']:.2%}
+
+TRADE METRICS:
+Total Trades: {results['trades']}
+Winning Trades: {metrics['winning_trades']}
+Losing Trades: {metrics['losing_trades']}
+Win Rate: {metrics['win_rate']:.2%}
+Profit Factor: {metrics['profit_factor']:.2f}
+Average Win: ${metrics['average_win']:.2f}
+Average Loss: ${metrics['average_loss']:.2f}
+Largest Win: ${metrics['largest_win']:.2f}
+Largest Loss: ${metrics['largest_loss']:.2f}
+
+MONTHLY METRICS:
+Best Month: {metrics['best_month']:.2%}
+Worst Month: {metrics['worst_month']:.2%}
+Positive Months: {metrics['positive_months']}
+Negative Months: {metrics['negative_months']}
+
+RISK MANAGEMENT SUMMARY:
+{self.risk_manager.get_risk_summary()}
+"""
+        return report 

@@ -29,14 +29,14 @@ from src.strategies.macd_canonical_strategy import MACDCanonicalStrategy
 from src.strategies.macd_aggressive_strategy import MACDAggressiveStrategy
 from src.strategies.macd_conservative_strategy import MACDConservativeStrategy
 from src.utils.config_loader import ConfigLoader
-from src.utils.logger import setup_logger
+from src.utils.logger import get_logger
 
 class ComprehensiveSystemTest(unittest.TestCase):
     """Comprehensive test suite for the entire trading system"""
     
     def setUp(self):
         """Set up test environment"""
-        self.logger = setup_logger('test_comprehensive_system')
+        self.logger = get_logger('test_comprehensive_system')
         self.config = ConfigLoader().config
         
         # Create sample data

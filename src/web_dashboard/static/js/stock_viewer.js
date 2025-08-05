@@ -395,19 +395,36 @@ class StockViewer {
             console.log('Response status:', response.status);
             console.log('Data keys:', Object.keys(data));
             
-            if (data.success && data.data && data.data.length > 0) {
-                console.log('Data points received:', data.data.length);
-                console.log('Available columns:', data.columns);
-                this.displayStockInfo(selectedSymbol, data.data);
-                this.createStockChart(data.data);
-                this.displayTechnicalIndicators(data.data, data.columns);
+            // Handle both response formats: data.data (with indicators) and data.stock_data (regular data)
+            let stockData = null;
+            let columns = [];
+            
+            if (data.success) {
+                if (data.data && data.data.length > 0) {
+                    // Response from data-with-indicators endpoint
+                    stockData = data.data;
+                    columns = data.columns || [];
+                    console.log('Data points received:', stockData.length);
+                    console.log('Available columns:', columns);
+                } else if (data.stock_data && data.stock_data.length > 0) {
+                    // Response from regular symbol endpoint
+                    stockData = data.stock_data;
+                    // Infer columns from the first data point
+                    if (stockData.length > 0) {
+                        columns = Object.keys(stockData[0]);
+                    }
+                    console.log('Data points received:', stockData.length);
+                    console.log('Available columns:', columns);
+                }
+            }
+            
+            if (stockData && stockData.length > 0) {
+                this.displayStockInfo(selectedSymbol, stockData);
+                this.createStockChart(stockData);
+                this.displayTechnicalIndicators(stockData, columns);
             } else {
                 console.error('Failed to load stock data:', data);
-                if (data.data && data.data.length === 0) {
-                    this.showError('No data available for this symbol');
-                } else {
-                    this.showError('Failed to load stock data: ' + (data.error || 'Unknown error'));
-                }
+                this.showError('No data available for this symbol');
             }
         } catch (error) {
             console.error('Error loading stock data:', error);
@@ -523,6 +540,11 @@ class StockViewer {
     }
     
     formatIndicatorValue(indicator, value) {
+        // Handle null/undefined values
+        if (value === null || value === undefined || isNaN(value)) {
+            return 'N/A';
+        }
+        
         if (indicator.includes('rsi') || indicator.includes('stoch') || indicator.includes('williams')) {
             return value.toFixed(2);
         } else if (indicator.includes('macd') || indicator.includes('atr') || indicator.includes('std')) {
@@ -533,6 +555,11 @@ class StockViewer {
     }
     
     getIndicatorColorClass(indicator, value) {
+        // Handle null/undefined values
+        if (value === null || value === undefined || isNaN(value)) {
+            return '';
+        }
+        
         if (indicator.includes('rsi')) {
             if (value > 70) return 'text-danger';
             if (value < 30) return 'text-success';
@@ -561,45 +588,51 @@ class StockViewer {
             const latest = stockData[stockData.length - 1];
             const previous = stockData[stockData.length - 2];
             
-            const currentPrice = latest.Close;
-            const previousPrice = previous ? previous.Close : currentPrice;
+            // Add null checks for all values
+            const currentPrice = latest?.Close || latest?.close || 0;
+            const previousPrice = previous ? (previous.Close || previous.close || currentPrice) : currentPrice;
             const change = currentPrice - previousPrice;
-            const changePercent = (change / previousPrice) * 100;
+            const changePercent = previousPrice !== 0 ? (change / previousPrice) * 100 : 0;
             
-            // Calculate additional metrics
-            const high = Math.max(...stockData.map(d => d.High));
-            const low = Math.min(...stockData.map(d => d.Low));
-            const avgVolume = stockData.reduce((sum, d) => sum + d.Volume, 0) / stockData.length;
+            // Calculate additional metrics with null checks
+            const high = Math.max(...stockData.map(d => d.High || d.high || 0));
+            const low = Math.min(...stockData.map(d => d.Low || d.low || 0));
+            const avgVolume = stockData.reduce((sum, d) => sum + (d.Volume || d.volume || 0), 0) / stockData.length;
             const volatility = this.calculateVolatility(stockData);
-            const totalReturn = ((currentPrice - stockData[0].Close) / stockData[0].Close) * 100;
+            const firstPrice = stockData[0]?.Close || stockData[0]?.close || currentPrice;
+            const totalReturn = firstPrice !== 0 ? ((currentPrice - firstPrice) / firstPrice) * 100 : 0;
             
-            stockPrice.innerHTML = `$${currentPrice.toFixed(2)}`;
+            // Format values with null checks
+            const formatPrice = (price) => price && !isNaN(price) ? price.toFixed(2) : '0.00';
+            const formatPercent = (percent) => percent && !isNaN(percent) ? percent.toFixed(2) : '0.00';
+            
+            stockPrice.innerHTML = `$${formatPrice(currentPrice)}`;
             stockChange.innerHTML = `
                 <span class="${change >= 0 ? 'change-positive' : 'change-negative'}">
-                    ${change >= 0 ? '+' : ''}${change.toFixed(2)} (${changePercent.toFixed(2)}%)
+                    ${change >= 0 ? '+' : ''}${formatPrice(change)} (${formatPercent(changePercent)}%)
                 </span>
             `;
             
             // Update stats grid
             stockStats.innerHTML = `
                 <div class="stat-item">
-                    <div class="stat-value">$${high.toFixed(2)}</div>
+                    <div class="stat-value">$${formatPrice(high)}</div>
                     <div class="stat-label">52-Week High</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">$${low.toFixed(2)}</div>
+                    <div class="stat-value">$${formatPrice(low)}</div>
                     <div class="stat-label">52-Week Low</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">${Math.round(avgVolume).toLocaleString()}</div>
+                    <div class="stat-value">${Math.round(avgVolume || 0).toLocaleString()}</div>
                     <div class="stat-label">Avg Volume</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value">${volatility.toFixed(2)}%</div>
+                    <div class="stat-value">${formatPercent(volatility)}%</div>
                     <div class="stat-label">Volatility</div>
                 </div>
                 <div class="stat-item">
-                    <div class="stat-value ${totalReturn >= 0 ? 'change-positive' : 'change-negative'}">${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%</div>
+                    <div class="stat-value ${totalReturn >= 0 ? 'change-positive' : 'change-negative'}">${totalReturn >= 0 ? '+' : ''}${formatPercent(totalReturn)}%</div>
                     <div class="stat-label">Total Return</div>
                 </div>
                 <div class="stat-item">
@@ -618,9 +651,16 @@ class StockViewer {
         
         const returns = [];
         for (let i = 1; i < stockData.length; i++) {
-            const dailyReturn = (stockData[i].Close - stockData[i-1].Close) / stockData[i-1].Close;
-            returns.push(dailyReturn);
+            const currentPrice = stockData[i]?.Close || stockData[i]?.close || 0;
+            const previousPrice = stockData[i-1]?.Close || stockData[i-1]?.close || 0;
+            
+            if (previousPrice !== 0) {
+                const dailyReturn = (currentPrice - previousPrice) / previousPrice;
+                returns.push(dailyReturn);
+            }
         }
+        
+        if (returns.length === 0) return 0;
         
         const mean = returns.reduce((sum, ret) => sum + ret, 0) / returns.length;
         const variance = returns.reduce((sum, ret) => sum + Math.pow(ret - mean, 2), 0) / returns.length;
@@ -678,11 +718,11 @@ class StockViewer {
         // Filter data based on timeframe
         const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
         
-        // Transform data for Syncfusion
+        // Transform data for Syncfusion with null checks
         const chartData = filteredData.map(d => ({
-            date: new Date(d.Date),
-            close: d.Close
-        }));
+            date: new Date(d.Date || d.date),
+            close: d.Close || d.close || 0
+        })).filter(d => d.close > 0); // Filter out invalid data points
         
         const chartContainer = document.getElementById('chartContainer');
         
@@ -746,15 +786,15 @@ class StockViewer {
         // Filter data based on timeframe
         const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
         
-        // Transform data for Syncfusion
+        // Transform data for Syncfusion with null checks
         const chartData = filteredData.map(d => ({
-            date: new Date(d.Date),
-            close: d.Close,
-            high: d.High,
-            low: d.Low,
-            open: d.Open,
-            volume: d.Volume
-        }));
+            date: new Date(d.Date || d.date),
+            close: d.Close || d.close || 0,
+            high: d.High || d.high || 0,
+            low: d.Low || d.low || 0,
+            open: d.Open || d.open || 0,
+            volume: d.Volume || d.volume || 0
+        })).filter(d => d.close > 0 && d.high > 0 && d.low > 0 && d.open > 0); // Filter out invalid data points
         
         const chartContainer = document.getElementById('chartContainer');
         
@@ -810,15 +850,15 @@ class StockViewer {
         // Filter data based on timeframe
         const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
         
-        // Transform data for Syncfusion
+        // Transform data for Syncfusion with null checks
         const chartData = filteredData.map(d => ({
-            date: new Date(d.Date),
-            close: d.Close,
-            high: d.High,
-            low: d.Low,
-            open: d.Open,
-            volume: d.Volume
-        }));
+            date: new Date(d.Date || d.date),
+            close: d.Close || d.close || 0,
+            high: d.High || d.high || 0,
+            low: d.Low || d.low || 0,
+            open: d.Open || d.open || 0,
+            volume: d.Volume || d.volume || 0
+        })).filter(d => d.close > 0 && d.high > 0 && d.low > 0 && d.open > 0); // Filter out invalid data points
         
         const chartContainer = document.getElementById('chartContainer');
         
@@ -867,11 +907,11 @@ class StockViewer {
         // Filter data based on timeframe
         const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
         
-        // Transform data for Syncfusion
+        // Transform data for Syncfusion with null checks
         const chartData = filteredData.map(d => ({
-            date: new Date(d.Date),
-            volume: d.Volume
-        }));
+            date: new Date(d.Date || d.date),
+            volume: d.Volume || d.volume || 0
+        })).filter(d => d.volume > 0); // Filter out invalid data points
         
         const chartContainer = document.getElementById('chartContainer');
         
@@ -919,12 +959,12 @@ class StockViewer {
         // Filter data based on timeframe
         const filteredData = this.filterDataByTimeframe(data, this.currentTimeframe);
         
-        // Transform data for Syncfusion
+        // Transform data for Syncfusion with null checks
         const chartData = filteredData.map(d => ({
-            date: new Date(d.Date),
-            close: d.Close,
-            volume: d.Volume
-        }));
+            date: new Date(d.Date || d.date),
+            close: d.Close || d.close || 0,
+            volume: d.Volume || d.volume || 0
+        })).filter(d => d.close > 0 && d.volume > 0); // Filter out invalid data points
         
         const chartContainer = document.getElementById('chartContainer');
         
@@ -1016,7 +1056,11 @@ class StockViewer {
                 return data;
         }
         
-        return data.filter(d => new Date(d.Date) >= startDate);
+        return data.filter(d => {
+            const date = d.Date || d.date;
+            if (!date) return false;
+            return new Date(date) >= startDate;
+        });
     }
 
     showLoading(show) {

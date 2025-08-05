@@ -749,7 +749,8 @@ class DataCollectionManager:
             row = cursor.fetchone()
             if row and row[0]:
                 try:
-                    data = pd.read_json(row[0])
+                    from io import StringIO
+                    data = pd.read_json(StringIO(row[0]))
                     return data
                 except Exception as e:
                     self.logger.error(f"Error parsing data for {symbol}: {e}")
@@ -794,7 +795,8 @@ class DataCollectionManager:
             row = cursor.fetchone()
             if row and row[0]:
                 try:
-                    data = pd.read_json(row[0])
+                    from io import StringIO
+                    data = pd.read_json(StringIO(row[0]))
                     return data
                 except Exception as e:
                     self.logger.error(f"Error parsing indicators for {symbol}: {e}")
