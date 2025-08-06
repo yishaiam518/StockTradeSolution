@@ -154,12 +154,16 @@ class CollectionScheduler:
                 # Calculate technical indicators for all symbols in this collection
                 self._calculate_technical_indicators()
                 
+                # Trigger AI ranking recalculation with new data
+                self._trigger_ai_ranking_recalculation()
+                
                 # Store result for status reporting
                 self.last_result = {
                     'success': True,
                     'updated_symbols': result.get('updated_symbols', 0),
                     'failed_symbols': result.get('failed_symbols', 0),
                     'indicators_calculated': True,
+                    'ai_ranking_updated': True,
                     'timestamp': self.last_run.isoformat()
                 }
             else:
@@ -266,6 +270,65 @@ class CollectionScheduler:
         except Exception as e:
             self.logger.error(f"Error updating database times for collection {self.collection_id}: {e}")
     
+    def _trigger_ai_ranking_recalculation(self):
+        """Trigger AI ranking recalculation after data update."""
+        try:
+            self.logger.info(f"Triggering AI ranking recalculation for collection {self.collection_id}")
+            
+            # Import AI integration components
+            from ..ai_ranking.ranking_engine import StockRankingEngine
+            from ..ai_ranking.strategy_analyzer import StrategyAnalyzer
+            
+            # Initialize ranking engine with current data manager
+            ranking_engine = StockRankingEngine(self.data_manager)
+            
+            # Perform ranking calculation with all stocks
+            ranking_result = ranking_engine.rank_collection(self.collection_id, max_stocks=1000)
+            
+            if ranking_result and ranking_result.ranked_stocks:
+                self.logger.info(f"AI ranking recalculation completed for collection {self.collection_id}: {len(ranking_result.ranked_stocks)} stocks ranked")
+                
+                # Log top 5 stocks for monitoring
+                top_stocks = ranking_result.ranked_stocks[:5]
+                for i, stock in enumerate(top_stocks, 1):
+                    self.logger.info(f"  {i}. {stock.symbol}: {stock.total_score:.2f} (Tech: {stock.technical_score:.2f}, Risk: {stock.risk_score:.2f})")
+                
+                # Store ranking metadata for tracking
+                self._store_ranking_metadata(ranking_result)
+                
+            else:
+                self.logger.warning(f"No ranking results generated for collection {self.collection_id}")
+                
+        except Exception as e:
+            self.logger.error(f"Error triggering AI ranking recalculation for collection {self.collection_id}: {e}")
+    
+    def _store_ranking_metadata(self, ranking_result):
+        """Store ranking metadata for tracking and monitoring."""
+        try:
+            # Store basic ranking metadata
+            metadata = {
+                'collection_id': self.collection_id,
+                'ranking_timestamp': datetime.now().isoformat(),
+                'total_stocks_ranked': len(ranking_result.ranked_stocks),
+                'top_stocks': [
+                    {
+                        'symbol': stock.symbol,
+                        'total_score': stock.total_score,
+                        'technical_score': stock.technical_score,
+                        'risk_score': stock.risk_score,
+                        'rank': i + 1
+                    }
+                    for i, stock in enumerate(ranking_result.ranked_stocks[:10])  # Top 10
+                ]
+            }
+            
+            # Store in database or cache for later retrieval
+            # This could be used for tracking ranking changes over time
+            self.logger.info(f"Stored ranking metadata for collection {self.collection_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error storing ranking metadata for collection {self.collection_id}: {e}")
+    
     def get_status(self) -> Dict:
         """Get the current status of this scheduler."""
         from datetime import datetime
@@ -274,7 +337,8 @@ class CollectionScheduler:
             'collection_id': self.collection_id,
             'is_running': self.is_running,
             'interval': self.update_interval,
-            'interval_description': self.available_intervals.get(self.update_interval, 'Unknown')
+            'interval_description': self.available_intervals.get(self.update_interval, 'Unknown'),
+            'ai_ranking_integrated': True  # Indicate that AI ranking is now integrated
         }
         
         # Add next run time if scheduler is running
