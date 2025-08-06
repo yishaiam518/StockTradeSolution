@@ -13,6 +13,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 import logging
+from .openai_integration import OpenAIStockAnalyzer
 
 logger = logging.getLogger(__name__)
 
@@ -39,13 +40,23 @@ class StockScore:
 
 class MultiFactorScorer:
     """
-    Multi-factor stock scoring system that combines technical, fundamental,
-    risk, and market context analysis.
+    Multi-factor stock scoring system that evaluates stocks across multiple dimensions.
+    
+    Scoring Components:
+    - Technical Analysis (40%): Trend strength, momentum, volatility
+    - Fundamental Analysis (30%): Price performance, growth metrics
+    - Risk Assessment (20%): Volatility, drawdown potential
+    - Market Context (10%): Volume trends, market sentiment
     """
     
-    def __init__(self, weights: Optional[ScoringWeights] = None):
-        self.weights = weights or ScoringWeights()
+    def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.weights = ScoringWeights()
+        
+        # Initialize OpenAI analyzer
+        self.openai_analyzer = OpenAIStockAnalyzer()
+        
+        self.logger.info("MultiFactorScorer initialized with OpenAI integration")
         
     def score_stock(self, symbol: str, data: pd.DataFrame) -> StockScore:
         """
@@ -412,34 +423,131 @@ class MultiFactorScorer:
     
     def _generate_explanation(self, symbol: str, technical: float, fundamental: float,
                              risk: float, market: float, total: float) -> str:
-        """Generate human-readable explanation of the score."""
+        """Generate human-readable explanation of the score using AI when available."""
+        
+        # Prepare scores dictionary
+        scores = {
+            'technical': technical,
+            'fundamental': fundamental,
+            'risk': risk,
+            'market': market,
+            'total': total
+        }
+        
+        # Try to get AI-powered explanation
+        try:
+            # Get technical data for AI analysis
+            technical_data = self._get_technical_data_for_ai(symbol)
+            market_context = self._get_market_context_for_ai()
+            
+            # Generate AI explanation
+            ai_explanation = self.openai_analyzer.generate_stock_explanation(
+                symbol=symbol,
+                scores=scores,
+                technical_data=technical_data,
+                market_context=market_context
+            )
+            
+            return ai_explanation
+            
+        except Exception as e:
+            self.logger.error(f"Error generating AI explanation for {symbol}: {e}")
+            # Fallback to enhanced template-based explanation
+            return self._generate_enhanced_template_explanation(symbol, scores)
+    
+    def _get_technical_data_for_ai(self, symbol: str) -> Optional[Dict]:
+        """Get technical data for AI analysis."""
+        try:
+            # This would ideally fetch actual technical indicators
+            # For now, return a placeholder
+            return {
+                "symbol": symbol,
+                "indicators_available": True,
+                "data_source": "technical_analysis"
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting technical data for {symbol}: {e}")
+            return None
+    
+    def _get_market_context_for_ai(self) -> Optional[Dict]:
+        """Get market context for AI analysis."""
+        try:
+            # This would ideally fetch current market conditions
+            # For now, return a placeholder
+            return {
+                "market_conditions": "general",
+                "volatility": "moderate",
+                "sentiment": "neutral"
+            }
+        except Exception as e:
+            self.logger.error(f"Error getting market context: {e}")
+            return None
+    
+    def _generate_enhanced_template_explanation(self, symbol: str, scores: Dict[str, float]) -> str:
+        """Generate enhanced template-based explanation."""
+        technical = scores.get('technical', 0)
+        fundamental = scores.get('fundamental', 0)
+        risk = scores.get('risk', 0)
+        market = scores.get('market', 0)
+        total = scores.get('total', 0)
+        
         explanations = []
         
         # Technical analysis explanation
         if technical >= 70:
             explanations.append("Strong technical indicators suggest bullish momentum")
+        elif technical >= 60:
+            explanations.append("Positive technical signals with good momentum")
         elif technical >= 50:
             explanations.append("Mixed technical signals with moderate momentum")
         else:
             explanations.append("Technical indicators show bearish pressure")
         
-        # Risk assessment explanation
-        if risk >= 70:
-            explanations.append("Low risk profile with stable price action")
-        elif risk >= 50:
-            explanations.append("Moderate risk with acceptable volatility")
+        # Fundamental analysis explanation
+        if fundamental >= 70:
+            explanations.append("excellent fundamental strength")
+        elif fundamental >= 60:
+            explanations.append("solid fundamental metrics")
+        elif fundamental >= 50:
+            explanations.append("moderate fundamental performance")
         else:
-            explanations.append("Higher risk due to increased volatility")
+            explanations.append("weak fundamental indicators")
+        
+        # Risk assessment
+        if risk >= 70:
+            explanations.append("low risk profile")
+        elif risk >= 60:
+            explanations.append("moderate risk with good management")
+        elif risk >= 50:
+            explanations.append("elevated risk requiring caution")
+        else:
+            explanations.append("high risk requiring careful consideration")
+        
+        # Market context
+        if market >= 70:
+            explanations.append("favorable market conditions")
+        elif market >= 60:
+            explanations.append("positive market environment")
+        elif market >= 50:
+            explanations.append("neutral market conditions")
+        else:
+            explanations.append("challenging market environment")
         
         # Overall assessment
         if total >= 70:
             overall = "Strong buy recommendation"
+        elif total >= 60:
+            overall = "Buy with moderate confidence"
         elif total >= 50:
             overall = "Hold with potential for improvement"
         else:
             overall = "Consider selling or avoiding"
         
-        return f"{symbol}: {overall}. {' '.join(explanations)}"
+        # Combine explanations
+        explanation_parts = [f"{symbol}: {overall}"]
+        explanation_parts.extend(explanations)
+        
+        return " - ".join(explanation_parts)
     
     def _generate_recommendations(self, symbol: str, technical: float, fundamental: float,
                                  risk: float, market: float, total: float) -> List[str]:
