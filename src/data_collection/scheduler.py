@@ -273,7 +273,11 @@ class CollectionScheduler:
     def _trigger_ai_ranking_recalculation(self):
         """Trigger AI ranking recalculation after data update."""
         try:
-            self.logger.info(f"Triggering AI ranking recalculation for collection {self.collection_id}")
+            self.logger.info("=" * 60)
+            self.logger.info("🤖 AI RANKING RECALCULATION STARTED")
+            self.logger.info(f"📊 Collection: {self.collection_id}")
+            self.logger.info(f"⏰ Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            self.logger.info("=" * 60)
             
             # Import AI integration components
             from ..ai_ranking.ranking_engine import StockRankingEngine
@@ -286,21 +290,31 @@ class CollectionScheduler:
             ranking_result = ranking_engine.rank_collection(self.collection_id, max_stocks=1000)
             
             if ranking_result and ranking_result.ranked_stocks:
-                self.logger.info(f"AI ranking recalculation completed for collection {self.collection_id}: {len(ranking_result.ranked_stocks)} stocks ranked")
+                self.logger.info(f"✅ AI ranking recalculation completed successfully!")
+                self.logger.info(f"📈 Total stocks ranked: {len(ranking_result.ranked_stocks)}")
                 
                 # Log top 5 stocks for monitoring
+                self.logger.info("🏆 TOP 5 STOCKS (Updated Rankings):")
                 top_stocks = ranking_result.ranked_stocks[:5]
                 for i, stock in enumerate(top_stocks, 1):
-                    self.logger.info(f"  {i}. {stock.symbol}: {stock.total_score:.2f} (Tech: {stock.technical_score:.2f}, Risk: {stock.risk_score:.2f})")
+                    self.logger.info(f"   {i}. {stock.symbol}: {stock.total_score:.2f} (Tech: {stock.technical_score:.2f}, Risk: {stock.risk_score:.2f})")
                 
                 # Store ranking metadata for tracking
                 self._store_ranking_metadata(ranking_result)
                 
+                self.logger.info("=" * 60)
+                self.logger.info("🤖 AI RANKING RECALCULATION COMPLETED")
+                self.logger.info("=" * 60)
+                
             else:
-                self.logger.warning(f"No ranking results generated for collection {self.collection_id}")
+                self.logger.warning(f"❌ No ranking results generated for collection {self.collection_id}")
                 
         except Exception as e:
-            self.logger.error(f"Error triggering AI ranking recalculation for collection {self.collection_id}: {e}")
+            self.logger.error("=" * 60)
+            self.logger.error("❌ AI RANKING RECALCULATION FAILED")
+            self.logger.error(f"📊 Collection: {self.collection_id}")
+            self.logger.error(f"💥 Error: {e}")
+            self.logger.error("=" * 60)
     
     def _store_ranking_metadata(self, ranking_result):
         """Store ranking metadata for tracking and monitoring."""
@@ -322,12 +336,16 @@ class CollectionScheduler:
                 ]
             }
             
+            # Store ranking metadata in instance for status reporting
+            self.last_ai_ranking_update = datetime.now()
+            self.last_ai_ranking_metadata = metadata
+            
             # Store in database or cache for later retrieval
             # This could be used for tracking ranking changes over time
-            self.logger.info(f"Stored ranking metadata for collection {self.collection_id}")
+            self.logger.info(f"✅ Stored ranking metadata for collection {self.collection_id}")
             
         except Exception as e:
-            self.logger.error(f"Error storing ranking metadata for collection {self.collection_id}: {e}")
+            self.logger.error(f"❌ Error storing ranking metadata for collection {self.collection_id}: {e}")
     
     def get_status(self) -> Dict:
         """Get the current status of this scheduler."""
@@ -353,6 +371,14 @@ class CollectionScheduler:
         
         if hasattr(self, 'last_result') and self.last_result:
             status['last_result'] = self.last_result
+        
+        # Add AI ranking information
+        if hasattr(self, 'last_ai_ranking_update') and self.last_ai_ranking_update:
+            status['ai_ranking_last_update'] = self.last_ai_ranking_update.isoformat()
+            status['ai_ranking_last_update_formatted'] = self.last_ai_ranking_update.strftime('%Y-%m-%d %H:%M:%S')
+        
+        if hasattr(self, 'last_ai_ranking_metadata') and self.last_ai_ranking_metadata:
+            status['ai_ranking_metadata'] = self.last_ai_ranking_metadata
         
         return status
 

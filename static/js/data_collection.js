@@ -294,8 +294,13 @@ class DataCollectionManager {
                                 <div class="col-md-6">
                                     <div class="d-flex flex-column">
                                         <div class="small text-muted">
-                                            <span id="last-run-${collection.collection_id}">Last: ${collection.last_run ? new Date(collection.last_run).toLocaleString() : 'Never'}</span> | 
+                                            <span id="last-run-${collection.collection_id}">Data: ${collection.last_run ? new Date(collection.last_run).toLocaleString() : 'Never'}</span> | 
                                             <span id="next-run-${collection.collection_id}">Next: ${collection.next_run ? new Date(collection.next_run).toLocaleString() : 'Not scheduled'}</span>
+                                        </div>
+                                        <div class="small text-info">
+                                            <span id="ai-ranking-last-update-${collection.collection_id}">
+                                                <i class="fas fa-robot"></i> AI Ranking: ${collection.ai_ranking_last_update ? new Date(collection.ai_ranking_last_update).toLocaleString() : 'Never'}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -1331,7 +1336,19 @@ class DataCollectionManager {
             const nextRun = isRunning ? new Date(now.getTime() + 60000).toLocaleTimeString() : 'Not scheduled';
             const lastRun = isRunning ? now.toLocaleTimeString() : 'Never';
             
-            statusContainer.innerHTML = `Last: ${lastRun} | Next: ${nextRun}`;
+            statusContainer.innerHTML = `
+                <small class="text-muted">
+                    <i class="fas fa-clock"></i> ${isRunning ? 'Running' : 'Stopped'}
+                </small>
+                <br>
+                <small class="text-muted">
+                    <i class="fas fa-sync"></i> Data: ${lastRun}
+                </small>
+                <br>
+                <small class="text-info">
+                    <i class="fas fa-robot"></i> AI Ranking: ${lastRun}
+                </small>
+            `;
         }
     }
 
