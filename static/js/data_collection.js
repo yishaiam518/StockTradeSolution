@@ -104,25 +104,36 @@ class DataCollectionManager {
 
     initializeEventListeners() {
         // Form submission
-        document.getElementById('dataCollectionForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.startDataCollection();
-        });
+        const collectionForm = document.getElementById('collectionForm');
+        if (collectionForm) {
+            collectionForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.startDataCollection();
+            });
+        }
 
         // Time period change
-        document.getElementById('timePeriod').addEventListener('change', (e) => {
-            const customRange = document.getElementById('customDateRange');
-            if (e.target.value === 'custom') {
-                customRange.style.display = 'block';
-            } else {
-                customRange.style.display = 'none';
-            }
-        });
+        const timePeriod = document.getElementById('timePeriod');
+        if (timePeriod) {
+            timePeriod.addEventListener('change', (e) => {
+                const customRange = document.getElementById('customDateRange');
+                if (customRange) {
+                    if (e.target.value === 'custom') {
+                        customRange.style.display = 'block';
+                    } else {
+                        customRange.style.display = 'none';
+                    }
+                }
+            });
+        }
 
         // Delete confirmation
-        document.getElementById('confirmDelete').addEventListener('click', () => {
-            this.deleteConfirmedCollection();
-        });
+        const confirmDelete = document.getElementById('confirmDelete');
+        if (confirmDelete) {
+            confirmDelete.addEventListener('click', () => {
+                this.deleteConfirmedCollection();
+            });
+        }
 
         // Auto-refresh collections every 30 seconds
         setInterval(() => {
@@ -160,6 +171,7 @@ class DataCollectionManager {
             // Handle the API response structure
             const collections = data.success ? data.collections : data;
             console.log('Collections to display:', collections);
+            console.log('Container element:', document.getElementById('collectionsContainer'));
             
             this.displayCollections(collections);
             
@@ -176,7 +188,9 @@ class DataCollectionManager {
     }
 
     displayCollections(collections) {
-        const container = document.getElementById('collectionsList');
+        console.log('displayCollections called with:', collections);
+        const container = document.getElementById('collectionsContainer');
+        console.log('Container found:', container);
         if (!container) {
             console.error('Container not found');
             return;
@@ -348,7 +362,7 @@ class DataCollectionManager {
     }
 
     async startDataCollection() {
-        const form = document.getElementById('dataCollectionForm');
+        const form = document.getElementById('collectionForm');
         const formData = new FormData(form);
         
         // Validate form
@@ -1543,7 +1557,7 @@ class DataCollectionManager {
         // Create modal HTML with Syncfusion Grid and real-time updates
         const modalHtml = `
             <div class="modal fade" id="aiRankingModal" tabindex="-1" aria-labelledby="aiRankingModalLabel" aria-hidden="true">
-                <div class="modal-dialog modal-xl">
+                <div class="modal-dialog modal-fullscreen-lg-down modal-xl">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title" id="aiRankingModalLabel">
@@ -1601,7 +1615,7 @@ class DataCollectionManager {
                                     </div>
 
                                     <!-- Enhanced Stocks Table with Syncfusion Grid -->
-                                    <div class="card">
+                                    <div class="card mb-4">
                                         <div class="card-header d-flex justify-content-between align-items-center">
                                             <h5 class="card-title mb-0">
                                                 <i class="fas fa-trophy"></i> All Ranked Stocks
@@ -1615,13 +1629,13 @@ class DataCollectionManager {
                                                 </button>
                                             </div>
                                         </div>
-                                        <div class="card-body">
-                                            <div id="ai-ranking-grid" style="height: 400px;"></div>
+                                        <div class="card-body p-0">
+                                            <div id="ai-ranking-grid" style="height: 500px; overflow: hidden;"></div>
                                         </div>
                                     </div>
 
                                     <!-- Market Analysis -->
-                                    <div class="card mt-4">
+                                    <div class="card mb-4">
                                         <div class="card-header">
                                             <h5 class="card-title mb-0">
                                                 <i class="fas fa-chart-line"></i> Market Analysis
@@ -1630,18 +1644,18 @@ class DataCollectionManager {
                                         <div class="card-body">
                                             <div class="row">
                                                 <div class="col-md-6">
-                                                    <h6>Market Regime</h6>
-                                                    <p id="market-regime">-</p>
+                                                    <h6 class="text-primary">Market Regime</h6>
+                                                    <p id="market-regime" class="text-muted">-</p>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <h6>Market Insight</h6>
-                                                    <p id="market-insight">-</p>
+                                                    <h6 class="text-primary">Market Insight</h6>
+                                                    <p id="market-insight" class="text-muted">-</p>
                                                 </div>
                                             </div>
                                             <div class="row mt-3">
                                                 <div class="col-12">
-                                                    <h6>Recommendations</h6>
-                                                    <ul id="market-recommendations">
+                                                    <h6 class="text-primary">Recommendations</h6>
+                                                    <ul id="market-recommendations" class="list-unstyled">
                                                         <!-- Recommendations will be populated here -->
                                                     </ul>
                                                 </div>
@@ -1650,7 +1664,7 @@ class DataCollectionManager {
                                     </div>
 
                                     <!-- Educational Content -->
-                                    <div class="card mt-4">
+                                    <div class="card mb-4">
                                         <div class="card-header">
                                             <h5 class="card-title mb-0">
                                                 <i class="fas fa-graduation-cap"></i> Learning Insights
@@ -1659,14 +1673,14 @@ class DataCollectionManager {
                                         <div class="card-body">
                                             <div class="row">
                                                 <div class="col-md-6">
-                                                    <h6>Key Insights</h6>
-                                                    <ul id="educational-insights">
+                                                    <h6 class="text-success">Key Insights</h6>
+                                                    <ul id="educational-insights" class="list-unstyled">
                                                         <!-- Insights will be populated here -->
                                                     </ul>
                                                 </div>
                                                 <div class="col-md-6">
-                                                    <h6>Learning Recommendations</h6>
-                                                    <ul id="learning-recommendations">
+                                                    <h6 class="text-info">Learning Recommendations</h6>
+                                                    <ul id="learning-recommendations" class="list-unstyled">
                                                         <!-- Learning recommendations will be populated here -->
                                                     </ul>
                                                 </div>
@@ -1781,7 +1795,10 @@ class DataCollectionManager {
         }
 
         // Initialize Syncfusion Grid with all stocks
-        this.initializeAIRankingGrid(data.top_stocks || []);
+        const allStocks = data.top_stocks || [];
+        console.log('Total stocks to display:', allStocks.length);
+        console.log('First 5 stocks:', allStocks.slice(0, 5));
+        this.initializeAIRankingGrid(allStocks);
 
         // Update market analysis
         this.updateMarketAnalysis(data.market_analysis || {});
@@ -1791,11 +1808,20 @@ class DataCollectionManager {
     }
 
     initializeAIRankingGrid(stocks) {
+        console.log('Initializing AI Ranking Grid with', stocks.length, 'stocks');
+        
         // Check if Syncfusion Grid is available
         if (typeof ej !== 'undefined' && ej.grids) {
-            this.createSyncfusionGrid(stocks);
+            try {
+                this.createSyncfusionGrid(stocks);
+            } catch (error) {
+                console.error('Error creating Syncfusion Grid:', error);
+                console.log('Falling back to regular table');
+                this.createFallbackTable(stocks);
+            }
         } else {
             // Fallback to regular table
+            console.log('Syncfusion Grid not available, using fallback table');
             this.createFallbackTable(stocks);
         }
     }
@@ -1803,6 +1829,9 @@ class DataCollectionManager {
     createSyncfusionGrid(stocks) {
         const gridElement = document.getElementById('ai-ranking-grid');
         if (!gridElement) return;
+
+        console.log('Creating Syncfusion Grid with', stocks.length, 'stocks');
+        console.log('Sample stock data:', stocks[0]);
 
         // Clear existing content
         gridElement.innerHTML = '';
@@ -1818,7 +1847,10 @@ class DataCollectionManager {
             recommendation: this.getRecommendation(stock.total_score)
         }));
 
-        // Create Syncfusion Grid
+        console.log('Grid data prepared:', gridData.length, 'items');
+        console.log('Sample grid data:', gridData[0]);
+
+        // Create Syncfusion Grid with enhanced features
         const grid = new ej.grids.Grid({
             dataSource: gridData,
             allowPaging: true,
@@ -1827,70 +1859,183 @@ class DataCollectionManager {
             allowGrouping: true,
             allowResizing: true,
             allowReordering: true,
-            pageSettings: { pageSize: 112, pageSizes: [20, 50, 100, 112, 200] },
+            allowSelection: true,
+            enableHover: true,
+            enableVirtualization: false, // Disable virtualization to show all items
+            pageSettings: { 
+                pageSize: 112, 
+                pageSizes: [20, 50, 100, 112, 200],
+                currentPage: 1
+            },
+            // Force show all items on first page
+            beforeDataBound: () => {
+                console.log('Before data bound. Setting page size to show all items.');
+                grid.pageSettings.pageSize = gridData.length;
+            },
+            dataBound: () => {
+                console.log('Grid data bound. Total records:', grid.getCurrentViewRecords().length);
+                console.log('Page size:', grid.pageSettings.pageSize);
+                console.log('Current page:', grid.pageSettings.currentPage);
+            },
             filterSettings: { type: 'Menu' },
+            sortSettings: { 
+                columns: [{ field: 'rank', direction: 'Ascending' }],
+                allowMultiSort: true
+            },
+            height: '100%',
+            width: '100%',
             columns: [
-                { field: 'rank', headerText: 'Rank', width: 80, textAlign: 'Center' },
-                { field: 'symbol', headerText: 'Symbol', width: 100 },
+                { 
+                    field: 'rank', 
+                    headerText: 'Rank', 
+                    width: 80, 
+                    textAlign: 'Center',
+                    type: 'number',
+                    allowSorting: true,
+                    sortComparer: (x, y) => x - y
+                },
+                { 
+                    field: 'symbol', 
+                    headerText: 'Symbol', 
+                    width: 100,
+                    allowSorting: true,
+                    template: (data) => `<strong class="text-primary">${data.symbol}</strong>`
+                },
                 { 
                     field: 'totalScore', 
                     headerText: 'Total Score', 
-                    width: 120,
+                    width: 150,
+                    allowSorting: true,
                     template: (data) => {
                         const score = data.totalScore;
                         const colorClass = this.getScoreColorClass(score);
-                        return `<div class="progress" style="height: 20px;">
-                                    <div class="progress-bar ${colorClass}" style="width: ${score}%">
-                                        ${score.toFixed(1)}
+                        return `<div class="d-flex align-items-center">
+                                    <div class="progress flex-grow-1 me-2" style="height: 20px;">
+                                        <div class="progress-bar ${colorClass}" style="width: ${score}%">
+                                            ${score.toFixed(1)}
+                                        </div>
                                     </div>
+                                    <small class="text-muted">${score.toFixed(1)}</small>
                                 </div>`;
+                    },
+                    sortComparer: (x, y) => x - y
+                },
+                { 
+                    field: 'technicalScore', 
+                    headerText: 'Technical', 
+                    width: 120, 
+                    format: 'N1',
+                    allowSorting: true,
+                    template: (data) => `<span class="badge bg-info">${data.technicalScore.toFixed(1)}</span>`,
+                    sortComparer: (x, y) => x - y
+                },
+                { 
+                    field: 'riskScore', 
+                    headerText: 'Risk', 
+                    width: 120, 
+                    format: 'N1',
+                    allowSorting: true,
+                    template: (data) => `<span class="badge bg-warning">${data.riskScore.toFixed(1)}</span>`,
+                    sortComparer: (x, y) => x - y
+                },
+                { 
+                    field: 'recommendation', 
+                    headerText: 'Recommendation', 
+                    width: 140,
+                    allowSorting: true,
+                    template: (data) => {
+                        const badgeClass = this.getRecommendationBadgeClass(data.totalScore);
+                        return `<span class="badge ${badgeClass}">${data.recommendation}</span>`;
                     }
                 },
-                { field: 'technicalScore', headerText: 'Technical', width: 100, format: 'N1' },
-                { field: 'riskScore', headerText: 'Risk', width: 100, format: 'N1' },
-                { field: 'recommendation', headerText: 'Recommendation', width: 120 },
                 { 
                     field: 'explanation', 
                     headerText: 'Explanation', 
-                    width: 300,
-                    template: (data) => `<small class="text-muted">${data.explanation}</small>`
+                    width: 250,
+                    allowSorting: true,
+                    template: (data) => `<small class="text-muted" style="white-space: normal;">${data.explanation}</small>`
                 },
                 {
+                    field: 'actions',
                     headerText: 'Actions',
                     width: 100,
+                    allowSorting: false,
                     template: (data) => `<button class="btn btn-sm btn-outline-primary" onclick="viewStockAnalysis('${data.symbol}')">
                                             <i class="fas fa-chart-line"></i> View
                                         </button>`
                 }
             ],
             toolbar: ['Search', 'Print', 'ExcelExport', 'PdfExport'],
-            searchSettings: { fields: ['symbol', 'explanation'] },
+            searchSettings: { fields: ['symbol', 'explanation', 'recommendation'] },
             excelExportComplete: () => {
                 console.log('Excel export completed');
+            },
+            rowSelected: (args) => {
+                console.log('Row selected:', args.data);
+            },
+            dataBound: () => {
+                console.log('Grid data bound');
             }
         });
 
         grid.appendTo(gridElement);
         this.aiRankingGrid = grid;
+        
+        // Add custom CSS to enhance sorting arrows visibility
+        const style = document.createElement('style');
+        style.textContent = `
+            .e-grid .e-headercell .e-sortfilter {
+                opacity: 1 !important;
+                visibility: visible !important;
+            }
+            .e-grid .e-headercell .e-sortfilter .e-sortasc,
+            .e-grid .e-headercell .e-sortfilter .e-sortdesc {
+                color: #007bff !important;
+                font-weight: bold !important;
+            }
+            .e-grid .e-headercell:hover .e-sortfilter {
+                opacity: 1 !important;
+            }
+        `;
+        document.head.appendChild(style);
     }
 
     createFallbackTable(stocks) {
         const gridElement = document.getElementById('ai-ranking-grid');
         if (!gridElement) return;
 
+        console.log('Creating fallback table with', stocks.length, 'stocks');
+
         // Create a responsive table as fallback
         const tableHtml = `
             <div class="table-responsive">
+                <div class="alert alert-info">
+                    <strong>Showing ${stocks.length} stocks</strong> - Using fallback table view
+                </div>
                 <table class="table table-hover table-striped">
                     <thead>
                         <tr>
-                            <th>Rank</th>
-                            <th>Symbol</th>
-                            <th>Total Score</th>
-                            <th>Technical</th>
-                            <th>Risk</th>
-                            <th>Recommendation</th>
-                            <th>Explanation</th>
+                            <th style="cursor: pointer;" onclick="sortTable(0)">
+                                Rank <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="cursor: pointer;" onclick="sortTable(1)">
+                                Symbol <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="cursor: pointer;" onclick="sortTable(2)">
+                                Total Score <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="cursor: pointer;" onclick="sortTable(3)">
+                                Technical <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="cursor: pointer;" onclick="sortTable(4)">
+                                Risk <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="cursor: pointer;" onclick="sortTable(5)">
+                                Recommendation <i class="fas fa-sort"></i>
+                            </th>
+                            <th style="cursor: pointer;" onclick="sortTable(6)">
+                                Explanation <i class="fas fa-sort"></i>
+                            </th>
                             <th>Actions</th>
                         </tr>
                     </thead>
@@ -1924,6 +2069,51 @@ class DataCollectionManager {
         `;
 
         gridElement.innerHTML = tableHtml;
+        
+        // Add sorting functionality for fallback table
+        window.sortTable = function(columnIndex) {
+            const table = gridElement.querySelector('table');
+            const tbody = table.querySelector('tbody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            
+            // Toggle sort direction
+            const currentDirection = table.getAttribute('data-sort-direction') || 'asc';
+            const newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+            table.setAttribute('data-sort-direction', newDirection);
+            
+            // Update sort icons
+            const headers = table.querySelectorAll('th');
+            headers.forEach((header, index) => {
+                const icon = header.querySelector('i');
+                if (icon && index < headers.length - 1) { // Skip Actions column
+                    if (index === columnIndex) {
+                        icon.className = newDirection === 'asc' ? 'fas fa-sort-up' : 'fas fa-sort-down';
+                    } else {
+                        icon.className = 'fas fa-sort';
+                    }
+                }
+            });
+            
+            // Sort rows
+            rows.sort((a, b) => {
+                const aValue = a.cells[columnIndex].textContent.trim();
+                const bValue = b.cells[columnIndex].textContent.trim();
+                
+                let aNum = parseFloat(aValue);
+                let bNum = parseFloat(bValue);
+                
+                if (!isNaN(aNum) && !isNaN(bNum)) {
+                    return newDirection === 'asc' ? aNum - bNum : bNum - aNum;
+                } else {
+                    return newDirection === 'asc' ? 
+                        aValue.localeCompare(bValue) : 
+                        bValue.localeCompare(aValue);
+                }
+            });
+            
+            // Reorder rows
+            rows.forEach(row => tbody.appendChild(row));
+        };
     }
 
     updateAIRankingGrid(stocks) {

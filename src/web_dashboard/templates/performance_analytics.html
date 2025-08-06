@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Analytics - StockTradeSolution</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        .sidebar .nav-link {
+            color: rgba(255,255,255,0.8);
+            padding: 12px 20px;
+            margin: 2px 0;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+        .sidebar .nav-link:hover {
+            color: white;
+            background-color: rgba(255,255,255,0.1);
+            transform: translateX(5px);
+        }
+        .sidebar .nav-link.active {
+            background-color: rgba(255,255,255,0.2);
+            color: white;
+            font-weight: 600;
+        }
+        .main-content {
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+            margin: 20px;
+            padding: 30px;
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        }
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 12px 12px 0 0 !important;
+            border: none;
+            padding: 20px;
+        }
+        .metric-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 10px 0;
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .metric-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+        .metric-value.positive {
+            color: #28a745;
+        }
+        .metric-value.negative {
+            color: #dc3545;
+        }
+        .positions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .position-item {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .position-symbol {
+            font-weight: 600;
+            font-size: 1.1em;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        .position-shares {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+        }
+        .position-value {
+            font-weight: 600;
+            color: #28a745;
+        }
+        .position-pnl {
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+        .position-pnl.positive {
+            color: #28a745;
+        }
+        .position-pnl.negative {
+            color: #dc3545;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 20px;
+            font-weight: 600;
+        }
+        .chart-container {
+            height: 300px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav class="col-md-3 col-lg-2 d-md-block bg-light sidebar">
+                <div class="position-sticky pt-3">
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link" href="/">
+                                <i class="fas fa-tachometer-alt"></i> Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/data-collection">
+                                <i class="fas fa-database"></i> Data Collection
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link active" href="/performance-analytics">
+                                <i class="fas fa-chart-line"></i> Performance Analytics
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/backtesting">
+                                <i class="fas fa-chart-line"></i> Backtesting
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/trading">
+                                <i class="fas fa-exchange-alt"></i> Trading
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </nav>
+
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                    <h1 class="h2">
+                        <i class="fas fa-chart-line text-primary"></i> Performance Analytics
+                    </h1>
+                </div>
+
+                <!-- Analysis Selection -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar"></i> Select Analysis Parameters
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <label for="analyticsCollection" class="form-label">Data Collection</label>
+                                        <select class="form-select" id="analyticsCollection">
+                                            <option value="">Select a collection...</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="analyticsSymbol" class="form-label">Symbol (Optional)</label>
+                                        <select class="form-select" id="analyticsSymbol">
+                                            <option value="">All symbols</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="specificStock" class="form-label">Specific Stock</label>
+                                        <input type="text" class="form-control" id="specificStock" placeholder="e.g., AAPL, MSFT">
+                                        <small class="form-text text-muted">Enter a specific stock symbol for detailed analysis</small>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label for="timeframe" class="form-label">Timeframe</label>
+                                        <select class="form-select" id="timeframe">
+                                            <option value="1m">1 Month</option>
+                                            <option value="3m">3 Months</option>
+                                            <option value="6m">6 Months</option>
+                                            <option value="1y" selected>1 Year</option>
+                                            <option value="2y">2 Years</option>
+                                            <option value="5y">5 Years</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mt-3">
+                                    <button type="button" class="btn btn-primary" id="loadAnalytics">
+                                        <i class="fas fa-chart-line"></i> Load Analytics
+                                    </button>
+                                    <button type="button" class="btn btn-success" id="loadStockAnalytics">
+                                        <i class="fas fa-search"></i> Analyze Specific Stock
+                                    </button>
+                                    <button type="button" class="btn btn-info" id="exportReport">
+                                        <i class="fas fa-download"></i> Export Report
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Metrics -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-pie"></i> Advanced Performance Metrics
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-2">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Sharpe Ratio</div>
+                                            <div class="metric-value" id="sharpe-ratio">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Sortino Ratio</div>
+                                            <div class="metric-value" id="sortino-ratio">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Calmar Ratio</div>
+                                            <div class="metric-value" id="calmar-ratio">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Max Drawdown</div>
+                                            <div class="metric-value negative" id="max-drawdown">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Volatility</div>
+                                            <div class="metric-value" id="volatility">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Beta</div>
+                                            <div class="metric-value" id="beta">--</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Risk Management -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-shield-alt"></i> Risk Management
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Position Size</div>
+                                            <div class="metric-value" id="position-size">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Stop Loss</div>
+                                            <div class="metric-value" id="stop-loss">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Portfolio Limits</div>
+                                            <div class="metric-value" id="portfolio-limits">--</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="metric-card">
+                                            <div class="metric-label">Sector Exposure</div>
+                                            <div class="metric-value" id="sector-exposure">--</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active Positions -->
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-briefcase"></i> Active Positions
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="positions-container">
+                                    <div class="text-center">
+                                        <i class="fas fa-chart-line fa-3x text-muted"></i>
+                                        <p class="mt-2 text-muted">Select analysis parameters to view positions</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Performance Charts -->
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-line"></i> Equity Curve
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" id="equity-curve-chart">
+                                    <div class="text-center">
+                                        <i class="fas fa-chart-line fa-3x text-muted"></i>
+                                        <p class="mt-2 text-muted">Chart loading...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-area"></i> Drawdown
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" id="drawdown-chart">
+                                    <div class="text-center">
+                                        <i class="fas fa-chart-area fa-3x text-muted"></i>
+                                        <p class="mt-2 text-muted">Chart loading...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-bar"></i> Returns Distribution
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" id="returns-distribution-chart">
+                                    <div class="text-center">
+                                        <i class="fas fa-chart-bar fa-3x text-muted"></i>
+                                        <p class="mt-2 text-muted">Chart loading...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card">
+                            <div class="card-header">
+                                <h5 class="card-title mb-0">
+                                    <i class="fas fa-chart-scatter"></i> Risk-Return
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="chart-container" id="risk-return-chart">
+                                    <div class="text-center">
+                                        <i class="fas fa-chart-scatter fa-3x text-muted"></i>
+                                        <p class="mt-2 text-muted">Chart loading...</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.syncfusion.com/ej2/24.2.9/dist/ej2.min.js"></script>
+    <link href="https://cdn.syncfusion.com/ej2/24.2.9/material.css" rel="stylesheet">
+    
+    <script>
+        // Performance Analytics Functions
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load collections for analytics dropdown
+            loadCollectionsForAnalytics();
+            
+            // Handle analytics collection selection
+            document.getElementById('analyticsCollection').addEventListener('change', function() {
+                loadSymbolsForAnalytics(this.value);
+            });
+            
+            // Handle load analytics button
+            document.getElementById('loadAnalytics').addEventListener('click', function() {
+                loadPerformanceAnalytics();
+            });
+            
+            // Handle specific stock analysis
+            document.getElementById('loadStockAnalytics').addEventListener('click', function() {
+                loadSpecificStockAnalytics();
+            });
+            
+            // Handle export report
+            document.getElementById('exportReport').addEventListener('click', function() {
+                exportAnalyticsReport();
+            });
+        });
+        
+        function loadCollectionsForAnalytics() {
+            fetch('/api/data-collection/collections')
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('analyticsCollection');
+                    select.innerHTML = '<option value="">Select a collection...</option>';
+                    
+                    if (data.collections && data.collections.length > 0) {
+                        data.collections.forEach(collection => {
+                            const option = document.createElement('option');
+                            option.value = collection.collection_id;
+                            option.textContent = `${collection.collection_id} (${collection.symbol_count || 0} symbols)`;
+                            select.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading collections for analytics:', error);
+                });
+        }
+        
+        function loadSymbolsForAnalytics(collectionId) {
+            if (!collectionId) {
+                document.getElementById('analyticsSymbol').innerHTML = '<option value="">All symbols</option>';
+                return;
+            }
+            
+            fetch(`/api/data-collection/collections/${collectionId}/symbols`)
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('analyticsSymbol');
+                    select.innerHTML = '<option value="">All symbols</option>';
+                    
+                    if (data.symbols && data.symbols.length > 0) {
+                        data.symbols.forEach(symbol => {
+                            const option = document.createElement('option');
+                            option.value = symbol;
+                            option.textContent = symbol;
+                            select.appendChild(option);
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading symbols for analytics:', error);
+                });
+        }
+        
+        function loadPerformanceAnalytics() {
+            const collectionId = document.getElementById('analyticsCollection').value;
+            const symbol = document.getElementById('analyticsSymbol').value;
+            const timeframe = document.getElementById('timeframe').value;
+            
+            if (!collectionId) {
+                alert('Please select a collection first.');
+                return;
+            }
+            
+            // Show loading state
+            showAnalyticsLoading();
+            
+            // Load advanced metrics
+            loadAdvancedMetrics(collectionId, symbol, timeframe);
+            
+            // Load risk management data
+            loadRiskManagementData(collectionId, symbol, timeframe);
+            
+            // Load active positions
+            loadActivePositions(collectionId, symbol, timeframe);
+            
+            // Load performance charts
+            loadPerformanceCharts(collectionId, symbol, timeframe);
+        }
+        
+        function loadSpecificStockAnalytics() {
+            const specificStock = document.getElementById('specificStock').value.trim().toUpperCase();
+            const timeframe = document.getElementById('timeframe').value;
+            
+            if (!specificStock) {
+                alert('Please enter a stock symbol.');
+                return;
+            }
+            
+            // Show loading state
+            showAnalyticsLoading();
+            
+            // Load specific stock analysis
+            loadSpecificStockData(specificStock, timeframe);
+            
+            // Load stock-specific metrics
+            loadStockSpecificMetrics(specificStock, timeframe);
+            
+            // Load stock-specific charts
+            loadStockSpecificCharts(specificStock, timeframe);
+        }
+        
+        function loadSpecificStockData(symbol, timeframe) {
+            // This would call your backend API for specific stock analysis
+            // For now, we'll simulate the data
+            setTimeout(() => {
+                document.getElementById('sharpe-ratio').textContent = '1.85';
+                document.getElementById('sortino-ratio').textContent = '2.1';
+                document.getElementById('calmar-ratio').textContent = '3.2';
+                document.getElementById('max-drawdown').textContent = '-5.2%';
+                document.getElementById('volatility').textContent = '12.8%';
+                document.getElementById('beta').textContent = '1.05';
+                
+                // Update risk management for specific stock
+                document.getElementById('position-size').textContent = '$15,000';
+                document.getElementById('stop-loss').textContent = '2 active';
+                document.getElementById('portfolio-limits').textContent = '45% used';
+                document.getElementById('sector-exposure').textContent = 'Tech: 60%';
+            }, 1000);
+        }
+        
+        function loadStockSpecificMetrics(symbol, timeframe) {
+            // Load metrics specific to the selected stock
+            setTimeout(() => {
+                const container = document.getElementById('positions-container');
+                container.innerHTML = `
+                    <div class="positions-grid">
+                        <div class="position-item">
+                            <div class="position-symbol">${symbol}</div>
+                            <div class="position-shares">150 shares</div>
+                            <div class="position-value">$${Math.floor(Math.random() * 20000 + 10000).toLocaleString()}</div>
+                            <div class="position-pnl positive">
+                                +$${Math.floor(Math.random() * 5000 + 1000).toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }, 1500);
+        }
+        
+        function loadStockSpecificCharts(symbol, timeframe) {
+            // Load charts specific to the selected stock
+            setTimeout(() => {
+                const chartContainers = [
+                    'equity-curve-chart',
+                    'drawdown-chart', 
+                    'returns-distribution-chart',
+                    'risk-return-chart'
+                ];
+                
+                chartContainers.forEach(containerId => {
+                    const container = document.getElementById(containerId);
+                    container.innerHTML = `
+                        <div class="text-center p-4">
+                            <i class="fas fa-chart-line fa-3x text-primary"></i>
+                            <p class="mt-2 text-primary">${symbol} Analysis</p>
+                            <small class="text-muted">Chart loading...</small>
+                        </div>
+                    `;
+                });
+            }, 2000);
+        }
+        
+        function showAnalyticsLoading() {
+            // Show loading for metrics
+            const metricIds = ['sharpe-ratio', 'sortino-ratio', 'calmar-ratio', 'max-drawdown', 'volatility', 'beta'];
+            metricIds.forEach(id => {
+                document.getElementById(id).textContent = 'Loading...';
+            });
+            
+            // Show loading for risk management
+            const riskIds = ['position-size', 'stop-loss', 'portfolio-limits', 'sector-exposure'];
+            riskIds.forEach(id => {
+                document.getElementById(id).textContent = 'Loading...';
+            });
+            
+            // Show loading for positions
+            document.getElementById('positions-container').innerHTML = `
+                <div class="text-center">
+                    <i class="fas fa-spinner fa-spin fa-2x text-muted"></i>
+                    <p class="mt-2 text-muted">Loading positions...</p>
+                </div>
+            `;
+        }
+        
+        function loadAdvancedMetrics(collectionId, symbol, timeframe) {
+            // This would call your backend API for performance analytics
+            // For now, we'll simulate the data
+            setTimeout(() => {
+                document.getElementById('sharpe-ratio').textContent = '1.25';
+                document.getElementById('sortino-ratio').textContent = '1.45';
+                document.getElementById('calmar-ratio').textContent = '2.1';
+                document.getElementById('max-drawdown').textContent = '-8.5%';
+                document.getElementById('volatility').textContent = '15.2%';
+                document.getElementById('beta').textContent = '0.95';
+            }, 1000);
+        }
+        
+        function loadRiskManagementData(collectionId, symbol, timeframe) {
+            // This would call your backend API for risk management data
+            // For now, we'll simulate the data
+            setTimeout(() => {
+                document.getElementById('position-size').textContent = '$25,000';
+                document.getElementById('stop-loss').textContent = '3 active';
+                document.getElementById('portfolio-limits').textContent = '65% used';
+                document.getElementById('sector-exposure').textContent = 'Tech: 40%';
+            }, 1500);
+        }
+        
+        function loadActivePositions(collectionId, symbol, timeframe) {
+            // This would call your backend API for active positions
+            // For now, we'll simulate the data
+            setTimeout(() => {
+                const positions = [
+                    { symbol: 'AAPL', shares: 100, value: 17500, pnl: 2500 },
+                    { symbol: 'MSFT', shares: 50, value: 18500, pnl: 3200 },
+                    { symbol: 'GOOGL', shares: 25, value: 3750, pnl: -150 }
+                ];
+                
+                const container = document.getElementById('positions-container');
+                container.innerHTML = `
+                    <div class="positions-grid">
+                        ${positions.map(pos => `
+                            <div class="position-item">
+                                <div class="position-symbol">${pos.symbol}</div>
+                                <div class="position-shares">${pos.shares} shares</div>
+                                <div class="position-value">$${pos.value.toLocaleString()}</div>
+                                <div class="position-pnl ${pos.pnl >= 0 ? 'positive' : 'negative'}">
+                                    ${pos.pnl >= 0 ? '+' : ''}$${pos.pnl.toLocaleString()}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }, 2000);
+        }
+        
+        function loadPerformanceCharts(collectionId, symbol, timeframe) {
+            // This would create actual charts using Syncfusion
+            // For now, we'll show placeholder charts
+            setTimeout(() => {
+                const chartContainers = [
+                    'equity-curve-chart',
+                    'drawdown-chart', 
+                    'returns-distribution-chart',
+                    'risk-return-chart'
+                ];
+                
+                chartContainers.forEach(containerId => {
+                    const container = document.getElementById(containerId);
+                    container.innerHTML = `
+                        <div class="text-center p-4">
+                            <i class="fas fa-chart-line fa-3x text-muted"></i>
+                            <p class="mt-2 text-muted">Chart loading...</p>
+                        </div>
+                    `;
+                });
+            }, 2500);
+        }
+        
+        function exportAnalyticsReport() {
+            // This would generate and download a PDF/Excel report
+            alert('Export functionality will be implemented soon!');
+        }
+    </script>
+</body>
+</html> 

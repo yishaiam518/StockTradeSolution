@@ -42,6 +42,7 @@ def main():
         
         # Create and start the dashboard app
         dashboard_app = DashboardApp()
+        # Use the correct method to start the Flask app
         dashboard_app.start()
         
     except ImportError as e:

@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional
 from pathlib import Path
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect
 from flask_socketio import SocketIO
 import pandas as pd
 import numpy as np
@@ -76,6 +76,9 @@ class DashboardApp:
         self.app.json_encoder = NumpyEncoder
         self.socketio = SocketIO(self.app, cors_allowed_origins="*")
         
+        # Configure proper MIME types for static files
+        self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+        
         # Dashboard state
         self.is_running = False
         self.update_thread = None
@@ -88,6 +91,22 @@ class DashboardApp:
         
         # Setup routes
         self._setup_routes()
+        
+                # Configure Flask to serve static files with correct MIME types
+        self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+        # Add route to serve JavaScript files with correct MIME type
+        @self.app.route('/static/js/<path:filename>')
+        def serve_js(filename):
+            """Serve JavaScript files with correct MIME type."""
+            import os
+            from flask import send_file
+            static_dir = os.path.join(os.getcwd(), 'static')
+            file_path = os.path.join(static_dir, 'js', filename)
+            if os.path.exists(file_path):
+                return send_file(file_path, mimetype='application/javascript')
+            else:
+                return "File not found", 404
         
         self.logger.info("Dashboard application initialized")
     
@@ -103,12 +122,19 @@ class DashboardApp:
         
         @self.app.route('/')
         def index():
-            return render_template('dashboard.html')
+            """Main dashboard page - redirect to data collection"""
+            return redirect('/data-collection')
         
         @self.app.route('/data-collection')
         def data_collection():
-            return render_template('data_collection.html')
-
+            """Data Collection page"""
+            return render_template('data_collection_clean.html')
+        
+        @self.app.route('/performance-analytics')
+        def performance_analytics():
+            """Performance Analytics page"""
+            return render_template('performance_analytics.html')
+        
         @self.app.route('/stock-viewer')
         def stock_viewer():
             """Render the full-screen stock viewer page."""
@@ -1712,6 +1738,454 @@ class DashboardApp:
                     'success': False,
                     'error': str(e)
                 }), 500
+
+        # Performance Analytics API Endpoints
+        @self.app.route('/api/performance/collection/<collection_id>/metrics', methods=['GET'])
+        def get_collection_performance_metrics(collection_id):
+            """Get performance metrics for a specific collection."""
+            try:
+                # Get collection details
+                collection = self.data_collection_manager.get_collection_details(collection_id)
+                if not collection:
+                    return jsonify({
+                        'success': False,
+                        'message': f'Collection {collection_id} not found'
+                    }), 404
+
+                # Calculate performance metrics
+                metrics = self._calculate_collection_metrics(collection_id)
+                
+                return jsonify({
+                    'success': True,
+                    'metrics': metrics
+                })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection performance metrics: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': str(e)
+                }), 500
+
+        @self.app.route('/api/performance/collection/<collection_id>/risk', methods=['GET'])
+        def get_collection_risk_data(collection_id):
+            """Get risk management data for a specific collection."""
+            try:
+                # Get risk management data
+                risk_data = self._calculate_collection_risk_data(collection_id)
+                
+                return jsonify({
+                    'success': True,
+                    'risk': risk_data
+                })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection risk data: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': str(e)
+                }), 500
+
+        @self.app.route('/api/performance/collection/<collection_id>/positions', methods=['GET'])
+        def get_collection_positions(collection_id):
+            """Get active positions for a specific collection."""
+            try:
+                # Get active positions
+                positions = self._get_collection_positions(collection_id)
+                
+                return jsonify({
+                    'success': True,
+                    'positions': positions
+                })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection positions: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': str(e)
+                }), 500
+
+        @self.app.route('/api/performance/collection/<collection_id>/charts', methods=['GET'])
+        def get_collection_charts(collection_id):
+            """Get performance charts for a specific collection."""
+            try:
+                # Get performance charts data
+                charts_data = self._get_collection_charts_data(collection_id)
+                
+                return jsonify({
+                    'success': True,
+                    'charts': charts_data
+                })
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection charts: {e}")
+                return jsonify({
+                    'success': False,
+                    'message': str(e)
+                }), 500
+
+        # AI Ranking API Endpoints
+        @self.app.route('/api/ai-ranking/collection/<collection_id>/rank', methods=['GET'])
+        def get_collection_ranking(collection_id):
+            """Get AI-powered ranking for a specific collection."""
+            try:
+                # Initialize AI integration if not already done
+                if not hasattr(self, '_ai_integration'):
+                    from ..data_collection.integration import DataCollectionAIIntegration
+                    self._ai_integration = DataCollectionAIIntegration(self.data_collection_manager)
+                
+                max_stocks = request.args.get('max_stocks', 1000, type=int)  # Default to high number to get all stocks
+                ranking_data = self._ai_integration.get_collection_ranking(collection_id, max_stocks)
+                
+                if ranking_data['success']:
+                    return jsonify(ranking_data)
+                else:
+                    return jsonify(ranking_data), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection ranking: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/ai-ranking/collection/<collection_id>/stock/<symbol>', methods=['GET'])
+        def get_stock_analysis(collection_id, symbol):
+            """Get detailed AI analysis for a specific stock."""
+            try:
+                # Initialize AI integration if not already done
+                if not hasattr(self, '_ai_integration'):
+                    from ..data_collection.integration import DataCollectionAIIntegration
+                    self._ai_integration = DataCollectionAIIntegration(self.data_collection_manager)
+                
+                analysis_data = self._ai_integration.get_stock_analysis(collection_id, symbol)
+                
+                if analysis_data['success']:
+                    return jsonify(analysis_data)
+                else:
+                    return jsonify(analysis_data), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting stock analysis: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/ai-ranking/collection/<collection_id>/performance', methods=['GET'])
+        def get_ranking_performance(collection_id):
+            """Get ranking performance metrics and insights."""
+            try:
+                # Initialize AI integration if not already done
+                if not hasattr(self, '_ai_integration'):
+                    from ..data_collection.integration import DataCollectionAIIntegration
+                    self._ai_integration = DataCollectionAIIntegration(self.data_collection_manager)
+                
+                performance_data = self._ai_integration.get_ranking_performance(collection_id)
+                
+                if performance_data['success']:
+                    return jsonify(performance_data)
+                else:
+                    return jsonify(performance_data), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting ranking performance: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+        @self.app.route('/api/ai-ranking/collection/<collection_id>/export', methods=['GET'])
+        def export_ranking_report(collection_id):
+            """Export ranking report in specified format."""
+            try:
+                # Initialize AI integration if not already done
+                if not hasattr(self, '_ai_integration'):
+                    from ..data_collection.integration import DataCollectionAIIntegration
+                    self._ai_integration = DataCollectionAIIntegration(self.data_collection_manager)
+                
+                format_type = request.args.get('format', 'json')
+                if format_type not in ['json', 'csv']:
+                    return jsonify({'success': False, 'error': 'Invalid format. Use "json" or "csv"'}), 400
+                
+                export_data = self._ai_integration.export_ranking_report(collection_id, format_type)
+                
+                if export_data['success']:
+                    return jsonify(export_data)
+                else:
+                    return jsonify(export_data), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error exporting ranking report: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+
+    def _calculate_collection_metrics(self, collection_id):
+        """Calculate performance metrics for a collection."""
+        try:
+            # Get collection symbols
+            symbols = self.data_collection_manager.get_collection_symbols(collection_id)
+            if not symbols:
+                return {
+                    'sharpe_ratio': 0.0,
+                    'sortino_ratio': 0.0,
+                    'calmar_ratio': 0.0,
+                    'max_drawdown': 0.0,
+                    'volatility': 0.0,
+                    'beta': 0.0
+                }
+
+            # Calculate metrics for each symbol and aggregate
+            total_sharpe = 0.0
+            total_sortino = 0.0
+            total_calmar = 0.0
+            total_max_drawdown = 0.0
+            total_volatility = 0.0
+            total_beta = 0.0
+            valid_symbols = 0
+
+            for symbol in symbols[:10]:  # Limit to first 10 symbols for performance
+                try:
+                    # Get symbol data
+                    data = self.data_collection_manager.get_symbol_data(collection_id, symbol)
+                    if data is None or data.empty:
+                        continue
+
+                    # Calculate returns
+                    if 'Close' in data.columns:
+                        returns = data['Close'].pct_change().dropna()
+                    elif 'close' in data.columns:
+                        returns = data['close'].pct_change().dropna()
+                    else:
+                        continue
+
+                    if len(returns) < 30:  # Need at least 30 days of data
+                        continue
+
+                    # Calculate metrics
+                    mean_return = returns.mean()
+                    std_return = returns.std()
+                    
+                    # Sharpe Ratio (assuming risk-free rate of 0.02)
+                    sharpe_ratio = (mean_return - 0.02/252) / std_return if std_return > 0 else 0
+                    
+                    # Sortino Ratio (using downside deviation)
+                    downside_returns = returns[returns < 0]
+                    downside_deviation = downside_returns.std() if len(downside_returns) > 0 else 0
+                    sortino_ratio = (mean_return - 0.02/252) / downside_deviation if downside_deviation > 0 else 0
+                    
+                    # Max Drawdown
+                    cumulative_returns = (1 + returns).cumprod()
+                    running_max = cumulative_returns.expanding().max()
+                    drawdown = (cumulative_returns - running_max) / running_max
+                    max_drawdown = drawdown.min()
+                    
+                    # Calmar Ratio
+                    calmar_ratio = mean_return / abs(max_drawdown) if max_drawdown != 0 else 0
+                    
+                    # Volatility (annualized)
+                    volatility = std_return * (252 ** 0.5)
+                    
+                    # Beta (simplified - using market correlation)
+                    beta = 1.0  # Simplified for now
+
+                    # Aggregate
+                    total_sharpe += sharpe_ratio
+                    total_sortino += sortino_ratio
+                    total_calmar += calmar_ratio
+                    total_max_drawdown += max_drawdown
+                    total_volatility += volatility
+                    total_beta += beta
+                    valid_symbols += 1
+
+                except Exception as e:
+                    self.logger.warning(f"Error calculating metrics for {symbol}: {e}")
+                    continue
+
+            # Return averages
+            if valid_symbols > 0:
+                return {
+                    'sharpe_ratio': total_sharpe / valid_symbols,
+                    'sortino_ratio': total_sortino / valid_symbols,
+                    'calmar_ratio': total_calmar / valid_symbols,
+                    'max_drawdown': total_max_drawdown / valid_symbols,
+                    'volatility': total_volatility / valid_symbols,
+                    'beta': total_beta / valid_symbols
+                }
+            else:
+                return {
+                    'sharpe_ratio': 0.0,
+                    'sortino_ratio': 0.0,
+                    'calmar_ratio': 0.0,
+                    'max_drawdown': 0.0,
+                    'volatility': 0.0,
+                    'beta': 0.0
+                }
+
+        except Exception as e:
+            self.logger.error(f"Error calculating collection metrics: {e}")
+            return {
+                'sharpe_ratio': 0.0,
+                'sortino_ratio': 0.0,
+                'calmar_ratio': 0.0,
+                'max_drawdown': 0.0,
+                'volatility': 0.0,
+                'beta': 0.0
+            }
+
+    def _calculate_collection_risk_data(self, collection_id):
+        """Calculate risk management data for a collection."""
+        try:
+            # Get collection details
+            collection = self.data_collection_manager.get_collection_details(collection_id)
+            if not collection:
+                return {
+                    'position_size': 'N/A',
+                    'stop_loss': 'N/A',
+                    'portfolio_limits': 'N/A',
+                    'sector_exposure': 'N/A'
+                }
+
+            # Calculate risk metrics
+            symbols = self.data_collection_manager.get_collection_symbols(collection_id)
+            
+            # Position Size (based on collection size)
+            position_size = f"{len(symbols)} symbols" if symbols else "0 symbols"
+            
+            # Stop Loss (example: 2% per position)
+            stop_loss = "2.0% per position"
+            
+            # Portfolio Limits (example: 5% max per position)
+            portfolio_limits = "5.0% max per position"
+            
+            # Sector Exposure (simplified)
+            sector_exposure = "Diversified across sectors"
+
+            return {
+                'position_size': position_size,
+                'stop_loss': stop_loss,
+                'portfolio_limits': portfolio_limits,
+                'sector_exposure': sector_exposure
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error calculating collection risk data: {e}")
+            return {
+                'position_size': 'N/A',
+                'stop_loss': 'N/A',
+                'portfolio_limits': 'N/A',
+                'sector_exposure': 'N/A'
+            }
+
+    def _get_collection_positions(self, collection_id):
+        """Get active positions for a collection."""
+        try:
+            # Get collection symbols
+            symbols = self.data_collection_manager.get_collection_symbols(collection_id)
+            if not symbols:
+                return []
+
+            # Simulate active positions for demonstration
+            positions = []
+            for i, symbol in enumerate(symbols[:5]):  # Show first 5 symbols
+                try:
+                    # Get current price
+                    data = self.data_collection_manager.get_symbol_data(collection_id, symbol)
+                    if data is None or data.empty:
+                        continue
+
+                    # Get latest price
+                    if 'Close' in data.columns:
+                        current_price = data['Close'].iloc[-1]
+                    elif 'close' in data.columns:
+                        current_price = data['close'].iloc[-1]
+                    else:
+                        continue
+
+                    # Simulate position data
+                    entry_price = current_price * (0.95 + 0.1 * (i % 3))  # Vary entry prices
+                    quantity = 100 + (i * 50)  # Vary quantities
+                    pnl = (current_price - entry_price) * quantity
+
+                    positions.append({
+                        'symbol': symbol,
+                        'quantity': quantity,
+                        'entry_price': round(entry_price, 2),
+                        'current_price': round(current_price, 2),
+                        'pnl': round(pnl, 2)
+                    })
+
+                except Exception as e:
+                    self.logger.warning(f"Error getting position for {symbol}: {e}")
+                    continue
+
+            return positions
+
+        except Exception as e:
+            self.logger.error(f"Error getting collection positions: {e}")
+            return []
+
+    def _get_collection_charts_data(self, collection_id):
+        """Get performance charts data for a collection."""
+        try:
+            # Get collection symbols
+            symbols = self.data_collection_manager.get_collection_symbols(collection_id)
+            if not symbols:
+                return {
+                    'price_chart': [],
+                    'volume_chart': [],
+                    'performance_chart': []
+                }
+
+            # Get data for first symbol as example
+            symbol = symbols[0]
+            data = self.data_collection_manager.get_symbol_data(collection_id, symbol)
+            
+            if data is None or data.empty:
+                return {
+                    'price_chart': [],
+                    'volume_chart': [],
+                    'performance_chart': []
+                }
+
+            # Prepare chart data
+            dates = data.index.tolist() if hasattr(data.index, 'tolist') else list(range(len(data)))
+            
+            if 'Close' in data.columns:
+                prices = data['Close'].tolist()
+                volumes = data['Volume'].tolist() if 'Volume' in data.columns else [0] * len(prices)
+            elif 'close' in data.columns:
+                prices = data['close'].tolist()
+                volumes = data['volume'].tolist() if 'volume' in data.columns else [0] * len(prices)
+            else:
+                return {
+                    'price_chart': [],
+                    'volume_chart': [],
+                    'performance_chart': []
+                }
+
+            # Calculate performance (cumulative returns)
+            performance = []
+            if len(prices) > 1:
+                base_price = prices[0]
+                for price in prices:
+                    performance.append(((price - base_price) / base_price) * 100)
+
+            return {
+                'price_chart': {
+                    'dates': dates,
+                    'prices': prices,
+                    'symbol': symbol
+                },
+                'volume_chart': {
+                    'dates': dates,
+                    'volumes': volumes,
+                    'symbol': symbol
+                },
+                'performance_chart': {
+                    'dates': dates,
+                    'performance': performance,
+                    'symbol': symbol
+                }
+            }
+
+        except Exception as e:
+            self.logger.error(f"Error getting collection charts data: {e}")
+            return {
+                'price_chart': [],
+                'volume_chart': [],
+                'performance_chart': []
+            }
     
     def _run_simplified_historical_backtest(self, strategy, profile, start_date, end_date, benchmark):
         """Run a simplified historical backtest using the same logic as the test script."""
