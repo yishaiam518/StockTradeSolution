@@ -2458,9 +2458,10 @@ window.exportAIRankingReport = async function(collectionId) {
 };
 
 window.viewStockAnalysis = function(symbol) {
-    // This would open a detailed stock analysis view
-    // For now, we'll just show an alert
-    alert(`Detailed analysis for ${symbol} will be implemented in the next phase`);
+    // Navigate to stock analysis page
+    const collectionId = window.currentCollectionId || 'ALL_20250803_160817';
+    const url = `/stock-analysis?symbol=${symbol}&collection=${collectionId}`;
+    window.open(url, '_blank');
 };
 
 // Initialize when DOM is loaded

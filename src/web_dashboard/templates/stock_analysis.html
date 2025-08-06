@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stock Analysis - StockTradeSolution</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Plotly.js -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!-- Syncfusion Grid -->
+    <link href="https://cdn.syncfusion.com/ej2/24.2.9/material.css" rel="stylesheet">
+    <script src="https://cdn.syncfusion.com/ej2/24.2.9/dist/ej2.min.js"></script>
+    
+    <style>
+        .analysis-card {
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .score-indicator {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+        .score-excellent { background: linear-gradient(45deg, #28a745, #20c997); }
+        .score-good { background: linear-gradient(45deg, #17a2b8, #6f42c1); }
+        .score-average { background: linear-gradient(45deg, #ffc107, #fd7e14); }
+        .score-poor { background: linear-gradient(45deg, #dc3545, #e83e8c); }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 15px;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        .recommendation-badge {
+            font-size: 1.2em;
+            padding: 10px 20px;
+            border-radius: 25px;
+        }
+        
+        .technical-indicator {
+            display: inline-block;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 15px;
+            font-size: 0.9em;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+        }
+        
+        .loading-spinner {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+        }
+        
+        .back-button {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <!-- Back Button -->
+    <button class="btn btn-outline-secondary back-button" onclick="goBack()">
+        <i class="fas fa-arrow-left"></i> Back
+    </button>
+
+    <div class="container-fluid mt-5">
+        <!-- Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="display-6">
+                            <i class="fas fa-chart-line text-primary"></i>
+                            <span id="stockSymbol">Loading...</span> Analysis
+                        </h1>
+                        <p class="text-muted" id="stockInfo">Loading stock information...</p>
+                    </div>
+                    <div class="text-end">
+                        <div id="recommendationBadge" class="recommendation-badge badge bg-secondary">
+                            Loading...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-spinner">
+            <div class="text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Analyzing stock data...</p>
+            </div>
+        </div>
+
+        <!-- Analysis Content -->
+        <div id="analysisContent" style="display: none;">
+            <!-- Score Overview -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card analysis-card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-tachometer-alt"></i> AI Analysis Overview</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-3 text-center">
+                                    <div class="score-indicator score-excellent" id="totalScoreIndicator">
+                                        <span id="totalScore">-</span>
+                                    </div>
+                                    <p class="mt-2 mb-0"><strong>Total Score</strong></p>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <div class="score-indicator score-good" id="technicalScoreIndicator">
+                                        <span id="technicalScore">-</span>
+                                    </div>
+                                    <p class="mt-2 mb-0"><strong>Technical</strong></p>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <div class="score-indicator score-average" id="fundamentalScoreIndicator">
+                                        <span id="fundamentalScore">-</span>
+                                    </div>
+                                    <p class="mt-2 mb-0"><strong>Fundamental</strong></p>
+                                </div>
+                                <div class="col-md-3 text-center">
+                                    <div class="score-indicator score-poor" id="riskScoreIndicator">
+                                        <span id="riskScore">-</span>
+                                    </div>
+                                    <p class="mt-2 mb-0"><strong>Risk</strong></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Analysis -->
+            <div class="row">
+                <!-- Left Column -->
+                <div class="col-lg-8">
+                    <!-- Price Chart -->
+                    <div class="chart-container">
+                        <h5><i class="fas fa-chart-area"></i> Price Performance</h5>
+                        <div id="priceChart" style="height: 400px;"></div>
+                    </div>
+
+                    <!-- Technical Indicators -->
+                    <div class="chart-container">
+                        <h5><i class="fas fa-chart-bar"></i> Technical Indicators</h5>
+                        <div id="technicalChart" style="height: 300px;"></div>
+                    </div>
+
+                    <!-- AI Explanation -->
+                    <div class="card analysis-card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-robot"></i> AI Analysis</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="aiExplanation" class="mb-3">
+                                <p class="text-muted">Loading AI analysis...</p>
+                            </div>
+                            <div id="technicalIndicators">
+                                <h6>Technical Indicators:</h6>
+                                <div id="indicatorsList">
+                                    <span class="technical-indicator">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column -->
+                <div class="col-lg-4">
+                    <!-- Key Metrics -->
+                    <div class="card analysis-card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-chart-pie"></i> Key Metrics</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="keyMetrics">
+                                <div class="metric-item mb-3">
+                                    <small class="text-muted">Current Price</small>
+                                    <div class="h5 mb-0" id="currentPrice">-</div>
+                                </div>
+                                <div class="metric-item mb-3">
+                                    <small class="text-muted">Change</small>
+                                    <div class="h5 mb-0" id="priceChange">-</div>
+                                </div>
+                                <div class="metric-item mb-3">
+                                    <small class="text-muted">Volume</small>
+                                    <div class="h5 mb-0" id="volume">-</div>
+                                </div>
+                                <div class="metric-item mb-3">
+                                    <small class="text-muted">Market Cap</small>
+                                    <div class="h5 mb-0" id="marketCap">-</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Assessment -->
+                    <div class="card analysis-card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-shield-alt"></i> Risk Assessment</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="riskAssessment">
+                                <div class="mb-3">
+                                    <label class="form-label">Volatility</label>
+                                    <div class="progress">
+                                        <div class="progress-bar" id="volatilityBar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Drawdown Risk</label>
+                                    <div class="progress">
+                                        <div class="progress-bar bg-warning" id="drawdownBar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Market Correlation</label>
+                                    <div class="progress">
+                                        <div class="progress-bar bg-info" id="correlationBar" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Trading Signals -->
+                    <div class="card analysis-card">
+                        <div class="card-header">
+                            <h5><i class="fas fa-signal"></i> Trading Signals</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="tradingSignals">
+                                <div class="signal-item mb-2">
+                                    <span class="badge bg-success">Strong Buy</span>
+                                    <small class="text-muted d-block">MACD Crossover</small>
+                                </div>
+                                <div class="signal-item mb-2">
+                                    <span class="badge bg-warning">Hold</span>
+                                    <small class="text-muted d-block">RSI Neutral</small>
+                                </div>
+                                <div class="signal-item mb-2">
+                                    <span class="badge bg-danger">Sell</span>
+                                    <small class="text-muted d-block">Volume Decline</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Stock Analysis JavaScript -->
+    <script>
+        class StockAnalysis {
+            constructor() {
+                this.symbol = this.getSymbolFromUrl();
+                this.collectionId = this.getCollectionIdFromUrl();
+                this.analysisData = null;
+                
+                this.init();
+            }
+            
+            getSymbolFromUrl() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('symbol') || 'AAPL';
+            }
+            
+            getCollectionIdFromUrl() {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get('collection') || 'ALL_20250803_160817';
+            }
+            
+            async init() {
+                this.updateHeader();
+                await this.loadStockAnalysis();
+            }
+            
+            updateHeader() {
+                document.getElementById('stockSymbol').textContent = this.symbol;
+                document.getElementById('stockInfo').textContent = `Collection: ${this.collectionId}`;
+            }
+            
+            async loadStockAnalysis() {
+                try {
+                    // Load AI analysis
+                    const analysisResponse = await fetch(`/api/ai-ranking/collection/${this.collectionId}/stock/${this.symbol}`);
+                    const analysisData = await analysisResponse.json();
+                    
+                    if (analysisData.success) {
+                        this.analysisData = analysisData;
+                        this.displayAnalysis(analysisData);
+                    } else {
+                        this.showError('Failed to load AI analysis');
+                    }
+                    
+                    // Load stock data
+                    const stockResponse = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${this.symbol}`);
+                    const stockData = await stockResponse.json();
+                    
+                    if (stockData.success) {
+                        this.displayStockData(stockData);
+                    }
+                    
+                } catch (error) {
+                    console.error('Error loading stock analysis:', error);
+                    this.showError('Error loading stock analysis');
+                } finally {
+                    this.hideLoading();
+                }
+            }
+            
+            displayAnalysis(data) {
+                // Update scores
+                const scores = data.scores || {};
+                this.updateScore('totalScore', scores.total_score || 0);
+                this.updateScore('technicalScore', scores.technical_score || 0);
+                this.updateScore('fundamentalScore', scores.fundamental_score || 0);
+                this.updateScore('riskScore', scores.risk_score || 0);
+                
+                // Update recommendation
+                this.updateRecommendation(scores.total_score || 0);
+                
+                // Update AI explanation
+                if (data.explanation) {
+                    document.getElementById('aiExplanation').innerHTML = `
+                        <div class="alert alert-info">
+                            <i class="fas fa-robot"></i> <strong>AI Analysis:</strong><br>
+                            ${data.explanation}
+                        </div>
+                    `;
+                }
+                
+                // Update technical indicators
+                if (data.technical_indicators) {
+                    this.displayTechnicalIndicators(data.technical_indicators);
+                }
+            }
+            
+            updateScore(elementId, score) {
+                const element = document.getElementById(elementId);
+                const indicator = document.getElementById(elementId + 'Indicator');
+                
+                if (element) element.textContent = score.toFixed(1);
+                
+                if (indicator) {
+                    indicator.className = 'score-indicator ' + this.getScoreClass(score);
+                }
+            }
+            
+            getScoreClass(score) {
+                if (score >= 70) return 'score-excellent';
+                if (score >= 60) return 'score-good';
+                if (score >= 50) return 'score-average';
+                return 'score-poor';
+            }
+            
+            updateRecommendation(score) {
+                const badge = document.getElementById('recommendationBadge');
+                let recommendation = 'Hold';
+                let badgeClass = 'bg-warning';
+                
+                if (score >= 70) {
+                    recommendation = 'Strong Buy';
+                    badgeClass = 'bg-success';
+                } else if (score >= 60) {
+                    recommendation = 'Buy';
+                    badgeClass = 'bg-primary';
+                } else if (score < 50) {
+                    recommendation = 'Sell';
+                    badgeClass = 'bg-danger';
+                }
+                
+                badge.className = `recommendation-badge badge ${badgeClass}`;
+                badge.textContent = recommendation;
+            }
+            
+            displayTechnicalIndicators(indicators) {
+                const container = document.getElementById('indicatorsList');
+                container.innerHTML = '';
+                
+                Object.entries(indicators).forEach(([name, value]) => {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'technical-indicator';
+                    indicator.textContent = `${name}: ${value}`;
+                    container.appendChild(indicator);
+                });
+            }
+            
+            displayStockData(data) {
+                if (data.stock_data && data.stock_data.length > 0) {
+                    const latestData = data.stock_data[data.stock_data.length - 1];
+                    
+                    // Update key metrics
+                    document.getElementById('currentPrice').textContent = `$${latestData.Close?.toFixed(2) || 'N/A'}`;
+                    
+                    if (data.stock_data.length > 1) {
+                        const previousData = data.stock_data[data.stock_data.length - 2];
+                        const change = latestData.Close - previousData.Close;
+                        const changePercent = (change / previousData.Close) * 100;
+                        
+                        const changeElement = document.getElementById('priceChange');
+                        changeElement.textContent = `${change >= 0 ? '+' : ''}$${change.toFixed(2)} (${changePercent.toFixed(2)}%)`;
+                        changeElement.className = `h5 mb-0 ${change >= 0 ? 'text-success' : 'text-danger'}`;
+                    }
+                    
+                    document.getElementById('volume').textContent = latestData.Volume?.toLocaleString() || 'N/A';
+                    
+                    // Create price chart
+                    this.createPriceChart(data.stock_data);
+                }
+            }
+            
+            createPriceChart(stockData) {
+                const dates = stockData.map(d => d.Date);
+                const prices = stockData.map(d => d.Close);
+                const volumes = stockData.map(d => d.Volume);
+                
+                const trace1 = {
+                    x: dates,
+                    y: prices,
+                    type: 'scatter',
+                    mode: 'lines+markers',
+                    name: 'Price',
+                    line: { color: '#007bff' }
+                };
+                
+                const trace2 = {
+                    x: dates,
+                    y: volumes,
+                    type: 'bar',
+                    name: 'Volume',
+                    yaxis: 'y2',
+                    marker: { color: 'rgba(0,123,255,0.3)' }
+                };
+                
+                const layout = {
+                    title: `${this.symbol} Price Performance`,
+                    xaxis: { title: 'Date' },
+                    yaxis: { title: 'Price ($)' },
+                    yaxis2: {
+                        title: 'Volume',
+                        overlaying: 'y',
+                        side: 'right'
+                    },
+                    height: 400
+                };
+                
+                Plotly.newPlot('priceChart', [trace1, trace2], layout);
+            }
+            
+            hideLoading() {
+                document.getElementById('loadingState').style.display = 'none';
+                document.getElementById('analysisContent').style.display = 'block';
+            }
+            
+            showError(message) {
+                document.getElementById('loadingState').innerHTML = `
+                    <div class="text-center">
+                        <i class="fas fa-exclamation-triangle text-danger" style="font-size: 3em;"></i>
+                        <p class="mt-3 text-danger">${message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Initialize stock analysis
+        let stockAnalysis;
+        document.addEventListener('DOMContentLoaded', function() {
+            stockAnalysis = new StockAnalysis();
+        });
+        
+        function goBack() {
+            window.history.back();
+        }
+    </script>
+</body>
+</html> 

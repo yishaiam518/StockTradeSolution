@@ -8,8 +8,10 @@ infrastructure to provide intelligent stock ranking within the data collection c
 import logging
 from typing import Dict, List, Optional
 from datetime import datetime
+import pandas as pd
 
-from ..ai_ranking.ranking_engine import StockRankingEngine
+from .data_manager import DataCollectionManager
+from ..ai_ranking.ranking_engine import AIRankingEngine
 from ..ai_ranking.strategy_analyzer import StrategyAnalyzer
 from ..ai_ranking.educational_ai import EducationalAI
 
@@ -143,42 +145,40 @@ class DataCollectionAIIntegration:
                 strategy_insight.strategy_name, stock_data
             )
             
-            response = {
+            # Get technical indicators
+            technical_indicators = self._get_technical_indicators(collection_id, symbol)
+            
+            # Generate AI explanation
+            explanation = self._generate_stock_explanation(symbol, stock_score)
+            
+            # Calculate risk metrics
+            risk_metrics = self._calculate_risk_metrics(stock_data)
+            
+            return {
                 'success': True,
                 'symbol': symbol,
                 'collection_id': collection_id,
-                'analysis': {
-                    'rank': stock_score.rank,
-                    'total_score': stock_score.total_score,
+                'scores': {
                     'technical_score': stock_score.technical_score,
                     'fundamental_score': stock_score.fundamental_score,
                     'risk_score': stock_score.risk_score,
                     'market_score': stock_score.market_score,
-                    'explanation': stock_score.explanation,
-                    'recommendations': stock_score.recommendations
+                    'total_score': stock_score.total_score
                 },
-                'strategy_insight': {
-                    'strategy_name': strategy_insight.strategy_name,
-                    'description': strategy_insight.description,
-                    'current_conditions': strategy_insight.current_conditions,
-                    'recommendation': strategy_insight.recommendation,
-                    'risk_level': strategy_insight.risk_level,
-                    'time_horizon': strategy_insight.time_horizon,
-                    'key_indicators': strategy_insight.key_indicators
-                },
+                'explanation': explanation,
+                'technical_indicators': technical_indicators,
+                'risk_metrics': risk_metrics,
+                'strategy_insight': strategy_insight.to_dict() if hasattr(strategy_insight, 'to_dict') else str(strategy_insight),
                 'educational_content': educational_content,
-                'learning_recommendations': self._generate_stock_learning_recommendations(stock_score)
+                'analysis_timestamp': datetime.now().isoformat()
             }
-            
-            return response
             
         except Exception as e:
             self.logger.error(f"Error getting stock analysis for {symbol}: {e}")
             return {
                 'success': False,
                 'error': str(e),
-                'symbol': symbol,
-                'message': 'Unable to analyze stock at this time'
+                'symbol': symbol
             }
     
     def get_ranking_performance(self, collection_id: str) -> Dict:
@@ -440,3 +440,93 @@ class DataCollectionAIIntegration:
         except Exception as e:
             self.logger.error(f"Error generating performance insights: {e}")
             return ["Performance analysis in progress", "Continue monitoring results"] 
+
+    def _generate_stock_explanation(self, symbol: str, stock_score) -> str:
+        """Generate AI-powered explanation for the stock."""
+        try:
+            # Use the AI ranking scorer to generate explanation
+            from ..ai_ranking.scoring_models import MultiFactorScorer
+            scorer = MultiFactorScorer()
+            
+            explanation = scorer._generate_explanation(
+                symbol=symbol,
+                technical=stock_score.technical_score,
+                fundamental=stock_score.fundamental_score,
+                risk=stock_score.risk_score,
+                market=stock_score.market_score,
+                total=stock_score.total_score
+            )
+            
+            return explanation
+            
+        except Exception as e:
+            self.logger.error(f"Error generating explanation for {symbol}: {e}")
+            # Fallback explanation
+            total_score = stock_score.total_score
+            if total_score >= 70:
+                return f"Strong buy recommendation for {symbol} based on excellent technical and fundamental indicators."
+            elif total_score >= 60:
+                return f"Buy recommendation for {symbol} with positive momentum and solid fundamentals."
+            elif total_score >= 50:
+                return f"Hold recommendation for {symbol} with mixed signals and moderate potential."
+            else:
+                return f"Consider selling {symbol} due to poor technical indicators and elevated risk."
+    
+    def _get_technical_indicators(self, collection_id: str, symbol: str) -> Dict:
+        """Get technical indicators for the stock."""
+        try:
+            # Get stock data with indicators
+            stock_data = self.data_collection_manager.get_stock_data_with_indicators(collection_id, symbol)
+            
+            if not stock_data or stock_data.empty:
+                return {}
+            
+            # Extract latest indicator values
+            latest_data = stock_data.iloc[-1]
+            indicators = {}
+            
+            # Common technical indicators
+            indicator_names = ['rsi', 'macd', 'macd_signal', 'bollinger_upper', 'bollinger_lower', 
+                             'sma_20', 'sma_50', 'ema_12', 'ema_26']
+            
+            for indicator in indicator_names:
+                if indicator in latest_data:
+                    value = latest_data[indicator]
+                    if pd.notna(value):
+                        indicators[indicator.upper()] = round(float(value), 2)
+            
+            return indicators
+            
+        except Exception as e:
+            self.logger.error(f"Error getting technical indicators for {symbol}: {e}")
+            return {}
+    
+    def _calculate_risk_metrics(self, stock_data) -> Dict:
+        """Calculate risk metrics for the stock."""
+        try:
+            if stock_data is None or stock_data.empty:
+                return {}
+            
+            # Calculate volatility (standard deviation of returns)
+            returns = stock_data['Close'].pct_change().dropna()
+            volatility = returns.std() * (252 ** 0.5) * 100  # Annualized volatility
+            
+            # Calculate maximum drawdown
+            cumulative_returns = (1 + returns).cumprod()
+            running_max = cumulative_returns.expanding().max()
+            drawdown = (cumulative_returns - running_max) / running_max
+            max_drawdown = drawdown.min() * 100
+            
+            # Calculate beta (market correlation - simplified)
+            # In a real implementation, you'd compare against a market index
+            beta = 1.0  # Placeholder
+            
+            return {
+                'volatility': round(volatility, 2),
+                'max_drawdown': round(max_drawdown, 2),
+                'beta': round(beta, 2)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error calculating risk metrics: {e}")
+            return {} 

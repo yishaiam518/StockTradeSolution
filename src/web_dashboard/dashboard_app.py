@@ -130,6 +130,16 @@ class DashboardApp:
             """Data Collection page"""
             return render_template('data_collection_clean.html')
         
+        @self.app.route('/stock-analysis')
+        def stock_analysis():
+            """Stock Analysis page for detailed stock analysis."""
+            return render_template('stock_analysis.html')
+        
+        @self.app.route('/test-route')
+        def test_route():
+            """Test route to verify routing is working."""
+            return "Test route is working!"
+        
         @self.app.route('/performance-analytics')
         def performance_analytics():
             """Performance Analytics page"""
