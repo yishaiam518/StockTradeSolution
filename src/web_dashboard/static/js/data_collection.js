@@ -100,6 +100,12 @@ class DataCollectionManager {
         this.initializeEventListeners();
         this.loadExchanges();
         this.loadCollections();
+        
+        // Add global function for manual testing
+        window.refreshAIRankingDisplay = (collectionId) => {
+            console.log(`Manual refresh of AI ranking for ${collectionId}`);
+            this.loadCollectionSchedulerStatus(collectionId);
+        };
     }
 
     initializeEventListeners() {
@@ -283,6 +289,11 @@ class DataCollectionManager {
                                             <span id="last-run-${collection.collection_id}">Last: ${collection.last_run ? new Date(collection.last_run).toLocaleString() : 'Never'}</span> | 
                                             <span id="next-run-${collection.collection_id}">Next: ${collection.next_run ? new Date(collection.next_run).toLocaleString() : 'Not scheduled'}</span>
                                         </div>
+                                        <div class="small text-info">
+                                            <span id="ai-ranking-last-update-${collection.collection_id}">
+                                                <i class="fas fa-robot"></i> AI Ranking: ${collection.ai_ranking_last_update ? new Date(collection.ai_ranking_last_update).toLocaleString() : 'Never'}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -310,6 +321,11 @@ class DataCollectionManager {
             
             // Load indicators status for this collection
             this.loadCollectionIndicatorsStatus(collection.collection_id);
+            
+            // Load scheduler status for this collection with a small delay to ensure DOM is ready
+            setTimeout(() => {
+                this.loadCollectionSchedulerStatus(collection.collection_id);
+            }, 100);
         });
     }
 
@@ -1187,6 +1203,7 @@ class DataCollectionManager {
 
     async loadCollectionSchedulerStatus(collectionId) {
         try {
+            console.log(`DEBUG: Loading scheduler status for ${collectionId}`);
             const response = await fetch(`/api/data-collection/collections/${collectionId}/scheduler/status`);
             const data = await response.json();
             
@@ -1195,6 +1212,9 @@ class DataCollectionManager {
                 const stopBtn = document.getElementById(`stop-${collectionId}`);
                 const lastRunElement = document.getElementById(`last-run-${collectionId}`);
                 const nextRunElement = document.getElementById(`next-run-${collectionId}`);
+                const aiRankingElement = document.getElementById(`ai-ranking-last-update-${collectionId}`);
+                
+                console.log(`DEBUG: Found elements - startBtn: ${!!startBtn}, stopBtn: ${!!stopBtn}, lastRunElement: ${!!lastRunElement}, nextRunElement: ${!!nextRunElement}, aiRankingElement: ${!!aiRankingElement}`);
                 
                 // Update button visibility based on auto_update status
                 if (startBtn && stopBtn) {
@@ -1214,6 +1234,15 @@ class DataCollectionManager {
 
                 if (nextRunElement) {
                     nextRunElement.textContent = `Next: ${data.auto_update ? (data.next_run ? new Date(data.next_run).toLocaleString() : 'Calculating...') : 'Not scheduled'}`;
+                }
+
+                // Update AI ranking last update time
+                if (aiRankingElement) {
+                    const aiUpdateTime = data.ai_ranking_last_update_formatted || data.ai_ranking_last_update;
+                    console.log(`DEBUG: Updating AI ranking for ${collectionId}, aiUpdateTime: ${aiUpdateTime}`);
+                    aiRankingElement.innerHTML = `<i class="fas fa-robot"></i> AI Ranking: ${aiUpdateTime ? new Date(aiUpdateTime).toLocaleString() : 'Never'}`;
+                } else {
+                    console.log(`DEBUG: AI ranking element not found for ${collectionId}`);
                 }
             }
         } catch (error) {

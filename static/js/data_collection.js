@@ -1214,6 +1214,7 @@ class DataCollectionManager {
                 const stopBtn = document.getElementById(`stop-${collectionId}`);
                 const lastRunElement = document.getElementById(`last-run-${collectionId}`);
                 const nextRunElement = document.getElementById(`next-run-${collectionId}`);
+                const aiRankingElement = document.getElementById(`ai-ranking-last-update-${collectionId}`);
                 
                 // Update button visibility based on auto_update status
                 if (startBtn && stopBtn) {
@@ -1233,6 +1234,12 @@ class DataCollectionManager {
 
                 if (nextRunElement) {
                     nextRunElement.textContent = `Next: ${data.auto_update ? (data.next_run ? new Date(data.next_run).toLocaleString() : 'Calculating...') : 'Not scheduled'}`;
+                }
+
+                // Update AI ranking last update time
+                if (aiRankingElement) {
+                    const aiUpdateTime = data.ai_ranking_last_update_formatted || data.ai_ranking_last_update;
+                    aiRankingElement.innerHTML = `<i class="fas fa-robot"></i> AI Ranking: ${aiUpdateTime ? new Date(aiUpdateTime).toLocaleString() : 'Never'}`;
                 }
             }
         } catch (error) {

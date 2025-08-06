@@ -1537,16 +1537,31 @@ class DashboardApp:
                 # Get real-time status from the scheduler
                 scheduler_status = self.data_scheduler.get_collection_status(collection_id)
                 self.logger.info(f"Scheduler status for {collection_id}: {scheduler_status}")
+                self.logger.info(f"Scheduler status keys: {list(scheduler_status.keys()) if scheduler_status else 'None'}")
+                self.logger.info(f"AI ranking last update: {scheduler_status.get('ai_ranking_last_update', 'Never') if scheduler_status else 'None'}")
                 
                 if scheduler_status:
-                    # Return real-time scheduler status
+                    # Check if AI ranking has been triggered, if not trigger it
+                    if not scheduler_status.get('ai_ranking_last_update'):
+                        self.logger.info(f"AI ranking not triggered yet for {collection_id}, triggering now...")
+                        collection_scheduler = self.data_scheduler.get_or_create_scheduler(collection_id)
+                        collection_scheduler._trigger_ai_ranking_recalculation()
+                        # Get updated status
+                        scheduler_status = self.data_scheduler.get_collection_status(collection_id)
+                        self.logger.info(f"Updated scheduler status after AI ranking trigger: {scheduler_status}")
+                    
+                    # Return real-time scheduler status with AI ranking information
                     return jsonify({
                         'success': True,
                         'collection_id': collection_id,
                         'auto_update': scheduler_status.get('is_running', False),
                         'update_interval': scheduler_status.get('interval', '24h'),
                         'last_run': scheduler_status.get('last_run'),
-                        'next_run': scheduler_status.get('next_run')
+                        'next_run': scheduler_status.get('next_run'),
+                        'ai_ranking_last_update': scheduler_status.get('ai_ranking_last_update'),
+                        'ai_ranking_last_update_formatted': scheduler_status.get('ai_ranking_last_update_formatted'),
+                        'ai_ranking_metadata': scheduler_status.get('ai_ranking_metadata'),
+                        'ai_ranking_integrated': scheduler_status.get('ai_ranking_integrated', True)
                     })
                 else:
                     # Fallback to database status if scheduler not found
@@ -1561,7 +1576,11 @@ class DashboardApp:
                             'auto_update': collection_details.get('auto_update', False),
                             'update_interval': collection_details.get('update_interval', '24h'),
                             'last_run': collection_details.get('last_run'),
-                            'next_run': collection_details.get('next_run')
+                            'next_run': collection_details.get('next_run'),
+                            'ai_ranking_last_update': collection_details.get('ai_ranking_last_update'),
+                            'ai_ranking_last_update_formatted': collection_details.get('ai_ranking_last_update_formatted'),
+                            'ai_ranking_metadata': collection_details.get('ai_ranking_metadata'),
+                            'ai_ranking_integrated': collection_details.get('ai_ranking_integrated', True)
                         })
                     else:
                         return jsonify({

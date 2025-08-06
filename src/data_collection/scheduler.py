@@ -365,7 +365,7 @@ class CollectionScheduler:
             status['next_run_formatted'] = self.next_run.strftime('%Y-%m-%d %H:%M:%S')
         
         # Add last run time and results if available
-        if hasattr(self, 'last_run') and self.last_run:
+        if self.last_run:
             status['last_run'] = self.last_run.isoformat()
             status['last_run_formatted'] = self.last_run.strftime('%Y-%m-%d %H:%M:%S')
         
@@ -419,7 +419,10 @@ class DataCollectionScheduler:
         """Get status of a specific collection scheduler."""
         if collection_id in self.collection_schedulers:
             return self.collection_schedulers[collection_id].get_status()
-        return None
+        else:
+            # Create scheduler if it doesn't exist to get status
+            scheduler = self.get_or_create_scheduler(collection_id)
+            return scheduler.get_status()
     
     def get_all_scheduler_status(self) -> List[Dict]:
         """Get status of all collection schedulers."""
