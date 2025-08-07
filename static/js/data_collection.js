@@ -2186,13 +2186,96 @@ class DataCollectionManager {
         console.log('Dual scores count:', totalStocks);
         console.log('First dual score:', dualScores[0]);
         
-        // Update summary statistics if element exists
-        const totalStocksElement = document.getElementById('total-stocks-count');
-        if (totalStocksElement) {
-            totalStocksElement.textContent = totalStocks;
+        // Update summary statistics if element exists - with retry logic
+        const updateStatistics = () => {
+            const totalStocksElement = document.getElementById('total-stocks-count');
+            console.log('Looking for total-stocks-count element:', totalStocksElement);
+            if (totalStocksElement) {
+                totalStocksElement.textContent = totalStocks;
+                console.log('Updated total-stocks-count to:', totalStocks);
+            } else {
+                console.log('❌ total-stocks-count element not found');
+            }
+            
+            // Calculate recommendation counts from dual scores
+            let strongBuy = 0, hold = 0, avoid = 0;
+            dualScores.forEach(score => {
+                const avgScore = (score.openai_score + score.local_score) / 2;
+                if (avgScore >= 70) strongBuy++;
+                else if (avgScore >= 50) hold++;
+                else avoid++;
+            });
+            
+            console.log('Calculated statistics - Strong Buy:', strongBuy, 'Hold:', hold, 'Avoid:', avoid);
+            
+            // Update recommendation counts if elements exist
+            const strongBuyElement = document.getElementById('strong-buy-count');
+            console.log('Looking for strong-buy-count element:', strongBuyElement);
+            if (strongBuyElement) {
+                strongBuyElement.textContent = strongBuy;
+                console.log('Updated strong-buy-count to:', strongBuy);
+            } else {
+                console.log('❌ strong-buy-count element not found');
+            }
+            
+            const holdElement = document.getElementById('hold-count');
+            console.log('Looking for hold-count element:', holdElement);
+            if (holdElement) {
+                holdElement.textContent = hold;
+                console.log('Updated hold-count to:', hold);
+            } else {
+                console.log('❌ hold-count element not found');
+            }
+            
+            const avoidElement = document.getElementById('avoid-count');
+            console.log('Looking for avoid-count element:', avoidElement);
+            if (avoidElement) {
+                avoidElement.textContent = avoid;
+                console.log('Updated avoid-count to:', avoid);
+            } else {
+                console.log('❌ avoid-count element not found');
+            }
+        };
+        
+        // Try to update statistics immediately
+        updateStatistics();
+        
+        // Debug: Check what elements are actually in the modal
+        const modalContent = document.getElementById('hybrid-ai-ranking-content');
+        if (modalContent) {
+            console.log('Modal content found:', modalContent);
+            console.log('Modal content HTML:', modalContent.innerHTML.substring(0, 500));
+            
+            // Check for any elements with 'count' in the ID
+            const countElements = modalContent.querySelectorAll('[id*="count"]');
+            console.log('Found elements with "count" in ID:', countElements.length);
+            countElements.forEach(el => console.log('  -', el.id, ':', el.textContent));
+            
+            // If no statistics elements found, create them dynamically
+            if (countElements.length === 0) {
+                console.log('No statistics elements found, creating them dynamically...');
+                this.createStatisticsElements(modalContent, totalStocks, dualScores, data);
+            }
+        } else {
+            console.log('❌ Modal content element not found');
         }
         
-        // Calculate recommendation counts from dual scores
+        // If elements not found, retry after a short delay
+        if (!document.getElementById('total-stocks-count')) {
+            console.log('Elements not found, retrying after 100ms...');
+            setTimeout(updateStatistics, 100);
+        }
+
+        // Initialize Syncfusion Grid with dual scores
+        console.log('Total dual scores to display:', dualScores.length);
+        console.log('First 5 dual scores:', dualScores.slice(0, 5));
+        this.initializeAIRankingGrid(dualScores);
+    }
+
+    createStatisticsElements(container, totalStocks, dualScores, data) {
+        console.log('Creating statistics elements dynamically...');
+        
+        // Calculate statistics
         let strongBuy = 0, hold = 0, avoid = 0;
         dualScores.forEach(score => {
             const avgScore = (score.openai_score + score.local_score) / 2;
@@ -2201,27 +2284,69 @@ class DataCollectionManager {
             else avoid++;
         });
         
-        // Update recommendation counts if elements exist
-        const strongBuyElement = document.getElementById('strong-buy-count');
-        if (strongBuyElement) {
-            strongBuyElement.textContent = strongBuy;
+        // Create the statistics section HTML
+        const statisticsHTML = `
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card border-primary">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Algorithm Performance Summary</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row" id="algorithm-performance-summary">
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h6 class="text-muted">Total Stocks</h6>
+                                        <h4 class="text-primary" id="total-stocks-count">${totalStocks}</h4>
+                                        <small class="text-muted">Analyzed stocks</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h6 class="text-muted">Strong Buy</h6>
+                                        <h4 class="text-success" id="strong-buy-count">${strongBuy}</h4>
+                                        <small class="text-muted">High confidence buys</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h6 class="text-muted">Hold</h6>
+                                        <h4 class="text-warning" id="hold-count">${hold}</h4>
+                                        <small class="text-muted">Neutral positions</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="text-center">
+                                        <h6 class="text-muted">Avoid</h6>
+                                        <h4 class="text-danger" id="avoid-count">${avoid}</h4>
+                                        <small class="text-muted">Low confidence</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Insert the statistics section before the Dual Scoring Table
+        const dualScoringTable = container.querySelector('.row .card-header');
+        if (dualScoringTable && dualScoringTable.textContent.includes('Dual Algorithm Scoring')) {
+            dualScoringTable.closest('.row').insertAdjacentHTML('beforebegin', statisticsHTML);
+            console.log('Statistics elements created and inserted successfully');
+        } else {
+            // If Dual Scoring Table not found, insert after Portfolio Management section
+            const portfolioSection = container.querySelector('.row.mb-4');
+            if (portfolioSection) {
+                portfolioSection.insertAdjacentHTML('afterend', statisticsHTML);
+                console.log('Statistics elements created and inserted after portfolio section');
+            } else {
+                // Fallback: append to the beginning
+                container.insertAdjacentHTML('afterbegin', statisticsHTML);
+                console.log('Statistics elements created and inserted at beginning');
+            }
         }
         
-        const holdElement = document.getElementById('hold-count');
-        if (holdElement) {
-            holdElement.textContent = hold;
-        }
-        
-        const avoidElement = document.getElementById('avoid-count');
-        if (avoidElement) {
-            avoidElement.textContent = avoid;
-        }
-
-        // Initialize Syncfusion Grid with dual scores
-        console.log('Total dual scores to display:', dualScores.length);
-        console.log('First 5 dual scores:', dualScores.slice(0, 5));
-        this.initializeAIRankingGrid(dualScores);
-
         // Update market analysis if available
         if (data.market_analysis) {
             this.updateMarketAnalysis(data.market_analysis);
@@ -2260,7 +2385,12 @@ class DataCollectionManager {
         }
         
         // Check if Syncfusion Grid is available
+        console.log('Checking Syncfusion availability:');
+        console.log('  - typeof ej:', typeof ej);
+        console.log('  - ej.grids:', typeof ej !== 'undefined' ? ej.grids : 'undefined');
+        
         if (typeof ej !== 'undefined' && ej.grids) {
+            console.log('✅ Syncfusion Grid available, creating grid...');
             try {
                 this.createSyncfusionGrid(stocks);
             } catch (error) {
@@ -2270,14 +2400,19 @@ class DataCollectionManager {
             }
         } else {
             // Fallback to regular table
-            console.log('Syncfusion Grid not available, using fallback table');
+            console.log('❌ Syncfusion Grid not available, using fallback table');
             this.createFallbackTable(stocks);
         }
     }
 
     createSyncfusionGrid(stocks) {
         const gridElement = document.getElementById('hybrid-ranking-table');
-        if (!gridElement) return;
+        console.log('Looking for hybrid-ranking-table element:', gridElement);
+        if (!gridElement) {
+            console.log('❌ hybrid-ranking-table element not found');
+            return;
+        }
+        console.log('✅ hybrid-ranking-table element found');
 
         console.log('Creating Syncfusion Grid with', stocks.length, 'stocks');
         console.log('Sample stock data:', stocks[0]);
@@ -2319,15 +2454,19 @@ class DataCollectionManager {
             allowSelection: true,
             enableHover: true,
             enableVirtualization: false, // Disable virtualization to show all items
+            // Scrolling configuration
+            enableColumnVirtualization: false,
+            enableRowVirtualization: false,
+            height: '400px', // Fixed height for scrolling
+            width: '100%',
             pageSettings: { 
-                pageSize: 112, 
+                pageSize: 20, 
                 pageSizes: [20, 50, 100, 112, 200],
                 currentPage: 1
             },
-            // Force show all items on first page
+            // Set reasonable page size
             beforeDataBound: () => {
-                console.log('Before data bound. Setting page size to show all items.');
-                grid.pageSettings.pageSize = gridData.length;
+                console.log('Before data bound. Using default page size of 20.');
             },
             dataBound: () => {
                 console.log('Grid data bound. Total records:', grid.getCurrentViewRecords().length);
@@ -2339,8 +2478,6 @@ class DataCollectionManager {
                 columns: [{ field: 'rank', direction: 'Ascending' }],
                 allowMultiSort: true
             },
-            height: '100%',
-            width: '100%',
             columns: [
                 { 
                     field: 'rank', 
