@@ -367,6 +367,122 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Hybrid AI Ranking Modal -->
+                <div class="modal fade" id="hybridAIRankingModal" tabindex="-1" aria-labelledby="hybridAIRankingModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-gradient-primary text-white">
+                                <h5 class="modal-title" id="hybridAIRankingModalLabel">
+                                    <i class="fas fa-robot me-2"></i>Hybrid AI Ranking Analysis
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <!-- Loading State -->
+                                <div id="hybrid-ai-ranking-loading" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-3">Loading hybrid AI ranking data...</p>
+                                </div>
+
+                                <!-- Hybrid Ranking Content -->
+                                <div id="hybrid-ai-ranking-content" style="display: none;">
+                                    <!-- Algorithm Performance Summary -->
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <div class="card border-primary">
+                                                <div class="card-header bg-primary text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Algorithm Performance Summary</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row" id="algorithm-performance-summary">
+                                                        <!-- Performance metrics will be populated here -->
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dual Scoring Table -->
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0"><i class="fas fa-balance-scale me-2"></i>Dual Algorithm Scoring</h6>
+                                                    <small class="text-muted">Comparing OpenAI vs Local Algorithm Analysis</small>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-hover" id="hybrid-ranking-table">
+                                                            <thead class="table-dark">
+                                                                <tr>
+                                                                    <th>Rank</th>
+                                                                    <th>Symbol</th>
+                                                                    <th>OpenAI Score</th>
+                                                                    <th>Local Score</th>
+                                                                    <th>Combined</th>
+                                                                    <th>Difference</th>
+                                                                    <th>Confidence</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="hybrid-ranking-tbody">
+                                                                <!-- Dual scores will be populated here -->
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Improvement Insights -->
+                                    <div class="row mt-4">
+                                        <div class="col-12">
+                                            <div class="card border-info">
+                                                <div class="card-header bg-info text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Algorithm Improvement Insights</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <ul id="improvement-insights-list" class="list-unstyled mb-0">
+                                                        <!-- Insights will be populated here -->
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-primary" id="export-hybrid-data">
+                                    <i class="fas fa-download me-2"></i>Export Analysis
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock Analysis Modal for Individual Stocks -->
+                <div class="modal fade" id="stockAnalysisModal" tabindex="-1" aria-labelledby="stockAnalysisModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-gradient-success text-white">
+                                <h5 class="modal-title" id="stockAnalysisModalLabel">
+                                    <i class="fas fa-chart-bar me-2"></i>Stock Analysis: <span id="analysis-symbol"></span>
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="stock-analysis-content">
+                                    <!-- Stock analysis content will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </main>
         </div>
     </div>
@@ -658,5 +774,121 @@
                         }, 2500);
                     }
                 </script>
+
+                <!-- Hybrid AI Ranking Modal -->
+                <div class="modal fade" id="hybridAIRankingModal" tabindex="-1" aria-labelledby="hybridAIRankingModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-gradient-primary text-white">
+                                <h5 class="modal-title" id="hybridAIRankingModalLabel">
+                                    <i class="fas fa-robot me-2"></i>Hybrid AI Ranking Analysis
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <!-- Loading State -->
+                                <div id="hybrid-ai-ranking-loading" class="text-center py-4">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-3">Loading hybrid AI ranking data...</p>
+                                </div>
+
+                                <!-- Hybrid Ranking Content -->
+                                <div id="hybrid-ai-ranking-content" style="display: none;">
+                                    <!-- Algorithm Performance Summary -->
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <div class="card border-primary">
+                                                <div class="card-header bg-primary text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Algorithm Performance Summary</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row" id="algorithm-performance-summary">
+                                                        <!-- Performance metrics will be populated here -->
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Dual Scoring Table -->
+                                    <div class="row">
+                                        <div class="col-12">
+                                            <div class="card">
+                                                <div class="card-header">
+                                                    <h6 class="mb-0"><i class="fas fa-balance-scale me-2"></i>Dual Algorithm Scoring</h6>
+                                                    <small class="text-muted">Comparing OpenAI vs Local Algorithm Analysis</small>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-hover" id="hybrid-ranking-table">
+                                                            <thead class="table-dark">
+                                                                <tr>
+                                                                    <th>Rank</th>
+                                                                    <th>Symbol</th>
+                                                                    <th>OpenAI Score</th>
+                                                                    <th>Local Score</th>
+                                                                    <th>Combined</th>
+                                                                    <th>Difference</th>
+                                                                    <th>Confidence</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody id="hybrid-ranking-tbody">
+                                                                <!-- Dual scores will be populated here -->
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Improvement Insights -->
+                                    <div class="row mt-4">
+                                        <div class="col-12">
+                                            <div class="card border-info">
+                                                <div class="card-header bg-info text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-lightbulb me-2"></i>Algorithm Improvement Insights</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <ul id="improvement-insights-list" class="list-unstyled mb-0">
+                                                        <!-- Insights will be populated here -->
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                <button type="button" class="btn btn-primary" id="export-hybrid-data">
+                                    <i class="fas fa-download me-2"></i>Export Analysis
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stock Analysis Modal for Individual Stocks -->
+                <div class="modal fade" id="stockAnalysisModal" tabindex="-1" aria-labelledby="stockAnalysisModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-xl">
+                        <div class="modal-content">
+                            <div class="modal-header bg-gradient-success text-white">
+                                <h5 class="modal-title" id="stockAnalysisModalLabel">
+                                    <i class="fas fa-chart-bar me-2"></i>Stock Analysis: <span id="analysis-symbol"></span>
+                                </h5>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div id="stock-analysis-content">
+                                    <!-- Stock analysis content will be loaded here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </body>
         </html> 

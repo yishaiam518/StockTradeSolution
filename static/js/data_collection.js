@@ -1744,20 +1744,107 @@ class DataCollectionManager {
 
     async loadAIRankingData(collectionId) {
         try {
-            // Fetch AI ranking data for all stocks
-            const response = await fetch(`/api/ai-ranking/collection/${collectionId}/rank?max_stocks=1000`);
+            console.log('Loading AI ranking data with hybrid approach...');
+            
+            // Show loading state
+            const loadingElement = document.getElementById('ai-ranking-loading');
+            if (loadingElement) {
+                loadingElement.innerHTML = `
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading AI ranking data...</p>
+                    <div class="progress mt-3" style="height: 5px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                    </div>
+                    <small class="text-muted">Loading comprehensive AI analysis with dual scoring...</small>
+                `;
+            }
+            
+            // Load hybrid data directly
+            const response = await fetch(`/api/ai-ranking/collection/${collectionId}/hybrid-rank?max_stocks=112`);
             const data = await response.json();
             
-            if (data.success) {
-                this.displayAIRankingResults(data);
-                // Set up real-time updates
-                this.setupRealTimeUpdates(collectionId);
+            console.log('API Response:', data);
+            
+            if (data.success && data.dual_scores && data.dual_scores.length > 0) {
+                console.log('Hybrid data loaded, displaying results');
+                console.log('First item:', data.dual_scores[0]);
+                
+                // Display hybrid results
+                this.displayHybridAIRankingResults(data);
+                
+                // Hide loading
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
             } else {
+                console.error('Failed to load hybrid data:', data);
                 this.showAlert('Error loading AI ranking data', 'error');
             }
         } catch (error) {
             console.error('Error loading AI ranking data:', error);
             this.showAlert('Error loading AI ranking data', 'error');
+        }
+    }
+
+    async loadComprehensiveAnalysisInBackground(collectionId) {
+        try {
+            console.log('Loading comprehensive analysis in background...');
+            
+            // Load comprehensive analysis
+            const response = await fetch(`/api/ai-ranking/collection/${collectionId}/hybrid-rank?max_stocks=112`);
+            const data = await response.json();
+            
+            if (data.success && data.dual_scores && data.dual_scores.length > 0) {
+                console.log('Comprehensive analysis loaded, updating display');
+                this.updateHybridAIRankingResults(data);
+                
+                // Hide loading
+                const loadingElement = document.getElementById('ai-ranking-loading');
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
+                
+                // Show completion message
+                this.showAlert('Comprehensive AI analysis completed!', 'success');
+            }
+        } catch (error) {
+            console.error('Error loading comprehensive analysis:', error);
+            this.showAlert('Background analysis completed with some errors', 'warning');
+        }
+    }
+
+    updateHybridAIRankingResults(data) {
+        // Update the grid with new data without hiding loading
+        const dualScores = data.dual_scores || [];
+        const totalStocks = dualScores.length;
+        
+        // Update summary statistics
+        document.getElementById('total-stocks-count').textContent = totalStocks;
+        
+        // Calculate recommendation counts from dual scores
+        let strongBuy = 0, hold = 0, avoid = 0;
+        dualScores.forEach(score => {
+            const avgScore = (score.openai_score + score.local_score) / 2;
+            if (avgScore >= 70) strongBuy++;
+            else if (avgScore >= 50) hold++;
+            else avoid++;
+        });
+        
+        document.getElementById('strong-buy-count').textContent = strongBuy;
+        document.getElementById('hold-count').textContent = hold;
+        document.getElementById('avoid-count').textContent = avoid;
+
+        // Update the grid with new data
+        console.log('Updating grid with comprehensive analysis:', dualScores.length, 'stocks');
+        this.initializeAIRankingGrid(dualScores);
+        
+        // Update status badge to show completion
+        const statusBadge = document.getElementById('update-status');
+        if (statusBadge) {
+            statusBadge.textContent = 'AI Analysis Complete';
+            statusBadge.className = 'badge bg-success ms-2';
         }
     }
 
@@ -1831,8 +1918,75 @@ class DataCollectionManager {
         this.updateEducationalContent(data.educational_content || {});
     }
 
+    displayHybridAIRankingResults(data) {
+        console.log('Displaying hybrid AI ranking results:', data);
+        
+        // Show results (don't hide loading for background updates)
+        document.getElementById('ai-ranking-results').style.display = 'block';
+
+        // Update summary statistics for hybrid data
+        const dualScores = data.dual_scores || [];
+        const totalStocks = dualScores.length;
+        
+        console.log('Dual scores count:', totalStocks);
+        console.log('First dual score:', dualScores[0]);
+        
+        document.getElementById('total-stocks-count').textContent = totalStocks;
+        
+        // Calculate recommendation counts from dual scores
+        let strongBuy = 0, hold = 0, avoid = 0;
+        dualScores.forEach(score => {
+            const avgScore = (score.openai_score + score.local_score) / 2;
+            if (avgScore >= 70) strongBuy++;
+            else if (avgScore >= 50) hold++;
+            else avoid++;
+        });
+        
+        document.getElementById('strong-buy-count').textContent = strongBuy;
+        document.getElementById('hold-count').textContent = hold;
+        document.getElementById('avoid-count').textContent = avoid;
+
+        // Initialize Syncfusion Grid with dual scores
+        console.log('Total dual scores to display:', dualScores.length);
+        console.log('First 5 dual scores:', dualScores.slice(0, 5));
+        this.initializeAIRankingGrid(dualScores);
+
+        // Update market analysis if available
+        if (data.market_analysis) {
+            this.updateMarketAnalysis(data.market_analysis);
+        }
+
+        // Update educational content if available
+        if (data.educational_content) {
+            this.updateEducationalContent(data.educational_content);
+        }
+    }
+
     initializeAIRankingGrid(stocks) {
         console.log('Initializing AI Ranking Grid with', stocks.length, 'stocks');
+        console.log('Sample stock data:', stocks[0]);
+        
+        // Check if this is hybrid data (has dual scores) or regular data
+        const isHybridData = stocks.length > 0 && stocks[0].hasOwnProperty('openai_score');
+        
+        if (isHybridData) {
+            console.log('Processing hybrid dual scoring data');
+            // Convert dual scores to grid format
+            const gridStocks = stocks.map((score, index) => ({
+                rank: index + 1,
+                symbol: score.symbol,
+                totalScore: score.combined_score || (score.openai_score + score.local_score) / 2,
+                openaiScore: score.openai_score,
+                localScore: score.local_score,
+                technicalScore: score.openai_score, // Use OpenAI as technical
+                riskScore: score.local_score, // Use local as risk
+                confidenceLevel: score.confidence_level || 'Medium Confidence',
+                explanation: score.explanation || 'Dual algorithm analysis',
+                recommendation: this.getRecommendation(score.combined_score || (score.openai_score + score.local_score) / 2)
+            }));
+            stocks = gridStocks;
+            console.log('Converted hybrid data:', stocks.slice(0, 3));
+        }
         
         // Check if Syncfusion Grid is available
         if (typeof ej !== 'undefined' && ej.grids) {
@@ -1862,17 +2016,25 @@ class DataCollectionManager {
 
         // Prepare data for grid
         const gridData = stocks.map(stock => ({
-            rank: stock.rank,
+            rank: stock.rank || 1,
             symbol: stock.symbol,
-            totalScore: stock.total_score,
-            technicalScore: stock.technical_score,
-            riskScore: stock.risk_score,
-            explanation: stock.explanation,
-            recommendation: this.getRecommendation(stock.total_score)
+            totalScore: stock.totalScore || stock.total_score || stock.combined_score || ((stock.openai_score || 0) + (stock.local_score || 0)) / 2,
+            openaiScore: stock.openaiScore || stock.openai_score || stock.total_score || 0,
+            localScore: stock.localScore || stock.local_score || stock.total_score || 0,
+            technicalScore: stock.technicalScore || stock.technical_score || stock.openai_score || 0,
+            riskScore: stock.riskScore || stock.risk_score || stock.local_score || 0,
+            confidenceLevel: stock.confidenceLevel || stock.confidence_level || 'Medium Confidence',
+            explanation: stock.explanation || 'Dual algorithm analysis',
+            recommendation: this.getRecommendation(stock.totalScore || stock.total_score || stock.combined_score || ((stock.openai_score || 0) + (stock.local_score || 0)) / 2)
         }));
 
         console.log('Grid data prepared:', gridData.length, 'items');
         console.log('Sample grid data:', gridData[0]);
+        console.log('Sample grid data details:');
+        console.log('  - openaiScore:', gridData[0].openaiScore);
+        console.log('  - localScore:', gridData[0].localScore);
+        console.log('  - totalScore:', gridData[0].totalScore);
+        console.log('  - riskScore:', gridData[0].riskScore);
 
         // Create Syncfusion Grid with enhanced features
         const grid = new ej.grids.Grid({
@@ -1926,32 +2088,47 @@ class DataCollectionManager {
                     template: (data) => `<strong class="text-primary">${data.symbol}</strong>`
                 },
                 { 
-                    field: 'totalScore', 
-                    headerText: 'Total Score', 
-                    width: 150,
+                    field: 'dualScore', 
+                    headerText: 'Dual Score (AI/Local)', 
+                    width: 180,
                     allowSorting: true,
                     template: (data) => {
-                        const score = data.totalScore;
-                        const colorClass = this.getScoreColorClass(score);
+                        const openaiScore = data.openaiScore || data.totalScore;
+                        const localScore = data.localScore || data.totalScore;
+                        const combinedScore = ((openaiScore + localScore) / 2).toFixed(1);
+                        
                         return `<div class="d-flex align-items-center">
-                                    <div class="progress flex-grow-1 me-2" style="height: 20px;">
-                                        <div class="progress-bar ${colorClass}" style="width: ${score}%">
-                                            ${score.toFixed(1)}
+                                    <div class="d-flex flex-column me-2">
+                                        <div class="d-flex align-items-center mb-1">
+                                            <i class="fas fa-robot text-success me-1" title="OpenAI"></i>
+                                            <span class="badge bg-success">${openaiScore.toFixed(1)}</span>
+                                        </div>
+                                        <div class="d-flex align-items-center">
+                                            <i class="fas fa-calculator text-info me-1" title="Local"></i>
+                                            <span class="badge bg-info">${localScore.toFixed(1)}</span>
                                         </div>
                                     </div>
-                                    <small class="text-muted">${score.toFixed(1)}</small>
+                                    <div class="flex-grow-1">
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-primary" style="width: ${combinedScore}%">
+                                                ${combinedScore}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>`;
                     },
-                    sortComparer: (x, y) => x - y
+                    sortComparer: (x, y) => ((x.openaiScore || x.totalScore) + (x.localScore || x.totalScore)) / 2 - ((y.openaiScore || y.totalScore) + (y.localScore || y.totalScore)) / 2
                 },
                 { 
-                    field: 'technicalScore', 
-                    headerText: 'Technical', 
-                    width: 120, 
-                    format: 'N1',
+                    field: 'confidenceLevel', 
+                    headerText: 'Confidence', 
+                    width: 140,
                     allowSorting: true,
-                    template: (data) => `<span class="badge bg-info">${data.technicalScore.toFixed(1)}</span>`,
-                    sortComparer: (x, y) => x - y
+                    template: (data) => {
+                        const confidence = data.confidenceLevel || 'Medium Confidence';
+                        const confidenceClass = this.getConfidenceClass(confidence);
+                        return `<span class="badge ${confidenceClass}">${confidence}</span>`;
+                    }
                 },
                 { 
                     field: 'riskScore', 
@@ -2046,10 +2223,10 @@ class DataCollectionManager {
                                 Symbol <i class="fas fa-sort"></i>
                             </th>
                             <th style="cursor: pointer;" onclick="sortTable(2)">
-                                Total Score <i class="fas fa-sort"></i>
+                                Dual Score (AI/Local) <i class="fas fa-sort"></i>
                             </th>
                             <th style="cursor: pointer;" onclick="sortTable(3)">
-                                Technical <i class="fas fa-sort"></i>
+                                Confidence <i class="fas fa-sort"></i>
                             </th>
                             <th style="cursor: pointer;" onclick="sortTable(4)">
                                 Risk <i class="fas fa-sort"></i>
@@ -2069,14 +2246,31 @@ class DataCollectionManager {
                                 <td><span class="badge bg-primary">${stock.rank}</span></td>
                                 <td><strong>${stock.symbol}</strong></td>
                                 <td>
-                                    <div class="progress" style="height: 20px;">
-                                        <div class="progress-bar ${this.getScoreColorClass(stock.total_score)}" 
-                                             style="width: ${stock.total_score}%">
-                                            ${stock.total_score.toFixed(1)}
+                                    <div class="d-flex align-items-center">
+                                        <div class="d-flex flex-column me-2">
+                                            <div class="d-flex align-items-center mb-1">
+                                                <i class="fas fa-robot text-success me-1" title="OpenAI"></i>
+                                                <span class="badge bg-success">${(stock.openai_score || stock.total_score).toFixed(1)}</span>
+                                            </div>
+                                            <div class="d-flex align-items-center">
+                                                <i class="fas fa-calculator text-info me-1" title="Local"></i>
+                                                <span class="badge bg-info">${(stock.local_score || stock.total_score).toFixed(1)}</span>
+                                            </div>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-primary" style="width: ${((stock.openai_score || stock.total_score) + (stock.local_score || stock.total_score)) / 2}%">
+                                                    ${(((stock.openai_score || stock.total_score) + (stock.local_score || stock.total_score)) / 2).toFixed(1)}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </td>
-                                <td>${stock.technical_score.toFixed(1)}</td>
+                                <td>
+                                    <span class="badge ${this.getConfidenceClass(stock.confidence_level || 'Medium Confidence')}">
+                                        ${stock.confidence_level || 'Medium Confidence'}
+                                    </span>
+                                </td>
                                 <td>${stock.risk_score.toFixed(1)}</td>
                                 <td><span class="badge ${this.getRecommendationBadgeClass(stock.total_score)}">${this.getRecommendation(stock.total_score)}</span></td>
                                 <td><small class="text-muted">${stock.explanation}</small></td>
@@ -2147,8 +2341,11 @@ class DataCollectionManager {
                 rank: stock.rank,
                 symbol: stock.symbol,
                 totalScore: stock.total_score,
+                openaiScore: stock.openai_score || stock.total_score,
+                localScore: stock.local_score || stock.total_score,
                 technicalScore: stock.technical_score,
                 riskScore: stock.risk_score,
+                confidenceLevel: stock.confidence_level || 'Medium Confidence',
                 explanation: stock.explanation,
                 recommendation: this.getRecommendation(stock.total_score)
             }));
@@ -2252,6 +2449,14 @@ class DataCollectionManager {
         if (score >= 70) return 'bg-success';
         if (score >= 50) return 'bg-warning';
         return 'bg-danger';
+    }
+
+    getConfidenceClass(confidence) {
+        if (confidence.includes('High')) return 'bg-success';
+        if (confidence.includes('Medium')) return 'bg-warning';
+        if (confidence.includes('Low')) return 'bg-info';
+        if (confidence.includes('Divergent')) return 'bg-danger';
+        return 'bg-secondary';
     }
 
     async loadPerformanceAnalyticsForCollection(collectionId, isModal = false) {

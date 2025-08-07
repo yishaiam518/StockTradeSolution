@@ -61,9 +61,179 @@ class OpenAIStockAnalyzer:
         """Check if OpenAI integration is available."""
         return self.client is not None and self.api_key is not None
     
-    def generate_stock_explanation(self, symbol: str, scores: Dict[str, float], 
-                                 technical_data: Optional[Dict] = None,
-                                 market_context: Optional[Dict] = None) -> str:
+    def generate_stock_explanation(self, symbol: str, scores: Dict[str, float],
+                                   technical_data: Optional[Dict] = None,
+                                   market_context: Optional[Dict] = None) -> str:
+        """
+        Generate AI-powered stock explanation.
+        """
+        try:
+            if not self.client:
+                return "OpenAI analysis not available"
+            
+            # Build prompt for explanation
+            prompt = self._build_explanation_prompt(symbol, scores, technical_data, market_context)
+            
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert stock analyst. Provide clear, concise explanations."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=300,
+                temperature=0.3
+            )
+            
+            return response.choices[0].message.content
+            
+        except Exception as e:
+            self.logger.error(f"Error generating stock explanation: {e}")
+            return f"Analysis explanation failed: {str(e)}"
+    
+    def analyze_stock_comprehensive(self, symbol: str, technical_data: Optional[Dict] = None,
+                                   market_context: Optional[Dict] = None) -> Dict:
+        """
+        Perform comprehensive stock analysis using OpenAI.
+        
+        Args:
+            symbol: Stock symbol
+            technical_data: Technical indicators data
+            market_context: Market context information
+            
+        Returns:
+            Dictionary with comprehensive analysis including score
+        """
+        try:
+            if not self.client:
+                self.logger.warning("OpenAI client not available")
+                return {'score': 50.0, 'analysis': 'OpenAI not available'}
+            
+            # Prepare prompt for comprehensive analysis
+            prompt = self._build_comprehensive_analysis_prompt(symbol, technical_data, market_context)
+            
+            response = self.client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert stock analyst. Provide comprehensive analysis with numerical scores (0-100) and detailed insights."},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500,
+                temperature=0.3
+            )
+            
+            analysis_text = response.choices[0].message.content
+            
+            # Extract score from response
+            score = self._extract_score_from_analysis(analysis_text)
+            
+            return {
+                'score': score,
+                'analysis': analysis_text,
+                'technical_insights': self._extract_technical_insights(analysis_text),
+                'recommendation': self._extract_recommendation(analysis_text)
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Error in comprehensive stock analysis: {e}")
+            return {'score': 50.0, 'analysis': f'Analysis failed: {str(e)}'}
+    
+    def _build_comprehensive_analysis_prompt(self, symbol: str, technical_data: Dict, market_context: Dict) -> str:
+        """Build comprehensive analysis prompt for OpenAI."""
+        prompt = f"""
+        Analyze {symbol} comprehensively and provide a numerical score (0-100) based on:
+        
+        Technical Data:
+        - Current Price: ${technical_data.get('current_price', 0):.2f}
+        - RSI: {technical_data.get('rsi', 50):.1f}
+        - MACD: {technical_data.get('macd', 0):.3f}
+        - MACD Signal: {technical_data.get('macd_signal', 0):.3f}
+        - SMA 20: ${technical_data.get('sma_20', 0):.2f}
+        - SMA 50: ${technical_data.get('sma_50', 0):.2f}
+        - Volume: {technical_data.get('volume', 0):,.0f}
+        
+        Market Context:
+        - Market Regime: {market_context.get('market_regime', 'unknown')}
+        - Volatility: {market_context.get('volatility_level', 'unknown')}
+        
+        Provide:
+        1. A numerical score (0-100) where 0=poor, 50=neutral, 100=excellent
+        2. Brief technical analysis
+        3. Investment recommendation (Buy/Hold/Sell)
+        4. Key risks and opportunities
+        
+        Format your response with clear sections and include the score prominently.
+        """
+        return prompt
+    
+    def _extract_score_from_analysis(self, analysis_text: str) -> float:
+        """Extract numerical score from OpenAI analysis text."""
+        try:
+            # Look for score patterns in the text
+            import re
+            
+            # Pattern 1: "score: 75" or "score is 75"
+            score_pattern1 = r'score[:\s]+(\d+(?:\.\d+)?)'
+            match1 = re.search(score_pattern1, analysis_text.lower())
+            if match1:
+                return float(match1.group(1))
+            
+            # Pattern 2: "75/100" or "75 out of 100"
+            score_pattern2 = r'(\d+(?:\.\d+)?)\s*/\s*100'
+            match2 = re.search(score_pattern2, analysis_text)
+            if match2:
+                return float(match2.group(1))
+            
+            # Pattern 3: Look for numbers followed by "score" or "rating"
+            score_pattern3 = r'(\d+(?:\.\d+)?)\s*(?:score|rating)'
+            match3 = re.search(score_pattern3, analysis_text.lower())
+            if match3:
+                return float(match3.group(1))
+            
+            # Default score if no pattern found
+            return 50.0
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting score from analysis: {e}")
+            return 50.0
+    
+    def _extract_technical_insights(self, analysis_text: str) -> List[str]:
+        """Extract technical insights from analysis text."""
+        try:
+            insights = []
+            
+            # Look for technical indicators mentioned
+            if 'rsi' in analysis_text.lower():
+                insights.append("RSI analysis included")
+            if 'macd' in analysis_text.lower():
+                insights.append("MACD analysis included")
+            if 'moving average' in analysis_text.lower():
+                insights.append("Moving average analysis included")
+            if 'volume' in analysis_text.lower():
+                insights.append("Volume analysis included")
+            
+            return insights
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting technical insights: {e}")
+            return []
+    
+    def _extract_recommendation(self, analysis_text: str) -> str:
+        """Extract investment recommendation from analysis text."""
+        try:
+            analysis_lower = analysis_text.lower()
+            
+            if 'buy' in analysis_lower and 'sell' not in analysis_lower:
+                return "Buy"
+            elif 'sell' in analysis_lower:
+                return "Sell"
+            elif 'hold' in analysis_lower:
+                return "Hold"
+            else:
+                return "Neutral"
+                
+        except Exception as e:
+            self.logger.error(f"Error extracting recommendation: {e}")
+            return "Neutral"
         """
         Generate AI-powered stock explanation.
         

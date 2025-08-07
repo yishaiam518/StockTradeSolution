@@ -343,10 +343,22 @@ class MultiFactorScorer:
                 return 50.0
             
             scores = []
-            close_col = 'close'
+            
+            # Try different column name variations
+            close_cols = ['close', 'Close', 'CLOSE']
+            close_col = None
+            
+            for col in close_cols:
+                if col in data.columns:
+                    close_col = col
+                    break
+            
+            if close_col is None:
+                self.logger.warning("No close column found, using default risk score")
+                return 50.0
             
             # Beta calculation (simplified)
-            if close_col in data.columns:
+            try:
                 returns = data[close_col].pct_change().dropna()
                 if len(returns) > 0:
                     volatility = returns.std()
@@ -357,19 +369,24 @@ class MultiFactorScorer:
                     else:  # High volatility
                         vol_score = 40
                     scores.append(vol_score)
+            except Exception as vol_error:
+                self.logger.warning(f"Error calculating volatility score: {vol_error}")
             
             # Drawdown analysis
-            if close_col in data.columns:
-                cumulative_returns = (1 + data[close_col].pct_change()).cumprod()
-                max_drawdown = (cumulative_returns / cumulative_returns.cummax() - 1).min()
-                
-                if max_drawdown > -0.1:  # Low drawdown
-                    dd_score = 80
-                elif max_drawdown > -0.2:  # Medium drawdown
-                    dd_score = 60
-                else:  # High drawdown
-                    dd_score = 40
-                scores.append(dd_score)
+            try:
+                if len(data) > 1:
+                    cumulative_returns = (1 + data[close_col].pct_change()).cumprod()
+                    max_drawdown = (cumulative_returns / cumulative_returns.cummax() - 1).min()
+                    
+                    if max_drawdown > -0.1:  # Low drawdown
+                        dd_score = 80
+                    elif max_drawdown > -0.2:  # Medium drawdown
+                        dd_score = 60
+                    else:  # High drawdown
+                        dd_score = 40
+                    scores.append(dd_score)
+            except Exception as dd_error:
+                self.logger.warning(f"Error calculating drawdown score: {dd_error}")
             
             return np.mean(scores) if scores else 50.0
             

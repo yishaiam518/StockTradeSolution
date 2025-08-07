@@ -11,7 +11,7 @@ from datetime import datetime
 import pandas as pd
 
 from .data_manager import DataCollectionManager
-from ..ai_ranking.ranking_engine import AIRankingEngine
+from ..ai_ranking.ranking_engine import StockRankingEngine
 from ..ai_ranking.strategy_analyzer import StrategyAnalyzer
 from ..ai_ranking.educational_ai import EducationalAI
 
@@ -93,6 +93,9 @@ class DataCollectionAIIntegration:
             
             self.logger.info(f"Final response top_stocks array size: {len(response['top_stocks'])}")
             self.logger.info(f"Response total_stocks field: {response['total_stocks']}")
+            
+            # Store in cache for future use
+            self.store_ranking_cache(collection_id, response)
             
             return response
             
@@ -507,26 +510,107 @@ class DataCollectionAIIntegration:
             if stock_data is None or stock_data.empty:
                 return {}
             
+            # Try different column name variations
+            close_cols = ['Close', 'close', 'CLOSE']
+            close_col = None
+            
+            for col in close_cols:
+                if col in stock_data.columns:
+                    close_col = col
+                    break
+            
+            if close_col is None:
+                self.logger.warning("No close column found for risk metrics")
+                return {}
+            
             # Calculate volatility (standard deviation of returns)
-            returns = stock_data['Close'].pct_change().dropna()
-            volatility = returns.std() * (252 ** 0.5) * 100  # Annualized volatility
-            
-            # Calculate maximum drawdown
-            cumulative_returns = (1 + returns).cumprod()
-            running_max = cumulative_returns.expanding().max()
-            drawdown = (cumulative_returns - running_max) / running_max
-            max_drawdown = drawdown.min() * 100
-            
-            # Calculate beta (market correlation - simplified)
-            # In a real implementation, you'd compare against a market index
-            beta = 1.0  # Placeholder
-            
-            return {
-                'volatility': round(volatility, 2),
-                'max_drawdown': round(max_drawdown, 2),
-                'beta': round(beta, 2)
-            }
+            try:
+                returns = stock_data[close_col].pct_change().dropna()
+                if len(returns) > 0:
+                    volatility = returns.std() * (252 ** 0.5) * 100  # Annualized volatility
+                    
+                    # Calculate maximum drawdown
+                    cumulative_returns = (1 + returns).cumprod()
+                    running_max = cumulative_returns.expanding().max()
+                    drawdown = (cumulative_returns - running_max) / running_max
+                    max_drawdown = drawdown.min() * 100
+                    
+                    # Calculate beta (market correlation - simplified)
+                    # In a real implementation, you'd compare against a market index
+                    beta = 1.0  # Placeholder
+                    
+                    return {
+                        'volatility': round(volatility, 2),
+                        'max_drawdown': round(max_drawdown, 2),
+                        'beta': round(beta, 2)
+                    }
+                else:
+                    return {}
+            except Exception as calc_error:
+                self.logger.warning(f"Error calculating risk metrics: {calc_error}")
+                return {}
             
         except Exception as e:
             self.logger.error(f"Error calculating risk metrics: {e}")
-            return {} 
+            return {}
+    
+    def get_cached_ranking(self, collection_id: str) -> Optional[Dict]:
+        """
+        Get cached ranking data for a collection.
+        
+        Args:
+            collection_id: ID of the data collection
+            
+        Returns:
+            Cached ranking data or None if not available
+        """
+        try:
+            # Check if we have a recent ranking stored
+            # For now, we'll implement a simple file-based cache
+            import os
+            import json
+            from pathlib import Path
+            
+            cache_dir = Path("data/cache")
+            cache_dir.mkdir(exist_ok=True)
+            cache_file = cache_dir / f"ranking_cache_{collection_id}.json"
+            
+            if cache_file.exists():
+                # Check if cache is recent (less than 1 hour old)
+                cache_age = datetime.now().timestamp() - cache_file.stat().st_mtime
+                if cache_age < 3600:  # 1 hour
+                    with open(cache_file, 'r') as f:
+                        cached_data = json.load(f)
+                        self.logger.info(f"Returning cached ranking for {collection_id}")
+                        return cached_data
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting cached ranking: {e}")
+            return None
+    
+    def store_ranking_cache(self, collection_id: str, ranking_data: Dict):
+        """
+        Store ranking data in cache.
+        
+        Args:
+            collection_id: ID of the data collection
+            ranking_data: Ranking data to cache
+        """
+        try:
+            import os
+            import json
+            from pathlib import Path
+            
+            cache_dir = Path("data/cache")
+            cache_dir.mkdir(exist_ok=True)
+            cache_file = cache_dir / f"ranking_cache_{collection_id}.json"
+            
+            with open(cache_file, 'w') as f:
+                json.dump(ranking_data, f, indent=2)
+            
+            self.logger.info(f"Stored ranking cache for {collection_id}")
+            
+        except Exception as e:
+            self.logger.error(f"Error storing ranking cache: {e}") 

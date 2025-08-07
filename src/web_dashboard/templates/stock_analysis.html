@@ -16,11 +16,27 @@
     <script src="https://cdn.syncfusion.com/ej2/24.2.9/dist/ej2.min.js"></script>
     
     <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .main-container {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            margin: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
         .analysis-card {
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
+        
         .score-indicator {
             width: 60px;
             height: 60px;
@@ -81,6 +97,130 @@
             left: 20px;
             z-index: 1000;
         }
+        
+        /* Technical Indicators Styles */
+        .technical-indicators-section {
+            margin-bottom: 30px;
+        }
+        
+        .technical-indicators-section .card {
+            border: none;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            border-radius: 15px;
+        }
+        
+        .technical-indicators-section .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px 15px 0 0;
+            border: none;
+        }
+        
+        .indicator-item {
+            text-align: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .indicator-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .indicator-value {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .indicator-value.text-success {
+            color: #27ae60 !important;
+        }
+        
+        .indicator-value.text-danger {
+            color: #e74c3c !important;
+        }
+        
+        .indicator-value.text-warning {
+            color: #f39c12 !important;
+        }
+        
+        /* Chart Controls */
+        .chart-controls-header {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .chart-controls-header .btn-outline-primary {
+            border-color: #667eea;
+            color: #667eea;
+        }
+        
+        .chart-controls-header .btn-outline-primary:hover,
+        .chart-controls-header .btn-outline-primary.active {
+            background-color: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+        
+        .chart-controls-header .btn-outline-secondary {
+            border-color: #6c757d;
+            color: #6c757d;
+        }
+        
+        .chart-controls-header .btn-outline-secondary:hover,
+        .chart-controls-header .btn-outline-secondary.active {
+            background-color: #6c757d;
+            border-color: #6c757d;
+            color: white;
+        }
+        
+        /* Stock Info Card */
+        .stock-info-card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        
+        .price-display {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+        
+        .stat-label {
+            font-size: 0.8rem;
+            color: #6c757d;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+        
+        .stat-value {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #2c3e50;
+        }
     </style>
 </head>
 <body>
@@ -89,7 +229,7 @@
         <i class="fas fa-arrow-left"></i> Back
     </button>
 
-    <div class="container-fluid mt-5">
+    <div class="main-container">
         <!-- Header -->
         <div class="row mb-4">
             <div class="col-12">
@@ -99,182 +239,170 @@
                             <i class="fas fa-chart-line text-primary"></i>
                             <span id="stockSymbol">Loading...</span> Analysis
                         </h1>
-                        <p class="text-muted" id="stockInfo">Loading stock information...</p>
+                        <p class="text-muted">Comprehensive stock analysis with AI insights</p>
                     </div>
                     <div class="text-end">
-                        <div id="recommendationBadge" class="recommendation-badge badge bg-secondary">
-                            Loading...
+                        <div class="recommendation-badge" id="recommendationBadge">
+                            <i class="fas fa-spinner fa-spin"></i> Analyzing...
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Loading State -->
-        <div id="loadingState" class="loading-spinner">
-            <div class="text-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <p class="mt-3">Analyzing stock data...</p>
-            </div>
-        </div>
-
-        <!-- Analysis Content -->
-        <div id="analysisContent" style="display: none;">
-            <!-- Score Overview -->
-            <div class="row mb-4">
-                <div class="col-12">
-                    <div class="card analysis-card">
-                        <div class="card-header">
-                            <h5><i class="fas fa-tachometer-alt"></i> AI Analysis Overview</h5>
-                        </div>
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-3 text-center">
-                                    <div class="score-indicator score-excellent" id="totalScoreIndicator">
-                                        <span id="totalScore">-</span>
-                                    </div>
-                                    <p class="mt-2 mb-0"><strong>Total Score</strong></p>
+        <!-- AI Score Overview -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="analysis-card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-brain"></i> AI Analysis Scores</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3 text-center">
+                                <div class="score-indicator score-excellent" id="technicalScoreIndicator">
+                                    <span id="technicalScore">-</span>
                                 </div>
-                                <div class="col-md-3 text-center">
-                                    <div class="score-indicator score-good" id="technicalScoreIndicator">
-                                        <span id="technicalScore">-</span>
-                                    </div>
-                                    <p class="mt-2 mb-0"><strong>Technical</strong></p>
+                                <p class="mt-2 mb-0"><strong>Technical</strong></p>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="score-indicator score-good" id="fundamentalScoreIndicator">
+                                    <span id="fundamentalScore">-</span>
                                 </div>
-                                <div class="col-md-3 text-center">
-                                    <div class="score-indicator score-average" id="fundamentalScoreIndicator">
-                                        <span id="fundamentalScore">-</span>
-                                    </div>
-                                    <p class="mt-2 mb-0"><strong>Fundamental</strong></p>
+                                <p class="mt-2 mb-0"><strong>Fundamental</strong></p>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="score-indicator score-average" id="marketScoreIndicator">
+                                    <span id="marketScore">-</span>
                                 </div>
-                                <div class="col-md-3 text-center">
-                                    <div class="score-indicator score-poor" id="riskScoreIndicator">
-                                        <span id="riskScore">-</span>
-                                    </div>
-                                    <p class="mt-2 mb-0"><strong>Risk</strong></p>
+                                <p class="mt-2 mb-0"><strong>Market</strong></p>
+                            </div>
+                            <div class="col-md-3 text-center">
+                                <div class="score-indicator score-poor" id="riskScoreIndicator">
+                                    <span id="riskScore">-</span>
                                 </div>
+                                <p class="mt-2 mb-0"><strong>Risk</strong></p>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
 
-            <!-- Detailed Analysis -->
+        <!-- Stock Information Card -->
+        <div class="stock-info-card" id="stockInfo" style="display: none;">
             <div class="row">
-                <!-- Left Column -->
-                <div class="col-lg-8">
-                    <!-- Price Chart -->
-                    <div class="chart-container">
-                        <h5><i class="fas fa-chart-area"></i> Price Performance</h5>
-                        <div id="priceChart" style="height: 400px;"></div>
+                <div class="col-md-6">
+                    <h2 id="stockSymbolDisplay" class="text-primary mb-3"></h2>
+                    <div id="stockPrice" class="price-display mb-3"></div>
+                    <div id="stockChange" class="mb-3"></div>
+                </div>
+                <div class="col-md-6">
+                    <div class="stats-grid" id="stockStats">
+                        <!-- Stats will be populated here -->
                     </div>
+                </div>
+            </div>
+        </div>
 
-                    <!-- Technical Indicators -->
-                    <div class="chart-container">
-                        <h5><i class="fas fa-chart-bar"></i> Technical Indicators</h5>
-                        <div id="technicalChart" style="height: 300px;"></div>
+        <!-- Technical Indicators Section -->
+        <div class="technical-indicators-section" id="technicalIndicators" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Technical Indicators</h5>
+                </div>
+                <div class="card-body">
+                    <!-- Technical indicators will be populated here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Chart Controls -->
+        <div class="chart-controls-header">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold mb-1">Chart Type</label>
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" class="btn btn-outline-primary btn-control active" data-chart-type="line">Line</button>
+                        <button type="button" class="btn btn-outline-primary btn-control" data-chart-type="candlestick">Candlestick</button>
+                        <button type="button" class="btn btn-outline-primary btn-control" data-chart-type="ohlc">OHLC</button>
+                        <button type="button" class="btn btn-outline-primary btn-control" data-chart-type="volume">Volume</button>
+                        <button type="button" class="btn btn-outline-primary btn-control" data-chart-type="combined">Combined</button>
                     </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold mb-1">Timeframe</label>
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" class="btn btn-outline-secondary btn-control" data-timeframe="1M">1M</button>
+                        <button type="button" class="btn btn-outline-secondary btn-control" data-timeframe="3M">3M</button>
+                        <button type="button" class="btn btn-outline-secondary btn-control" data-timeframe="6M">6M</button>
+                        <button type="button" class="btn btn-outline-secondary btn-control" data-timeframe="1Y">1Y</button>
+                        <button type="button" class="btn btn-outline-secondary btn-control active" data-timeframe="ALL">ALL</button>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label fw-bold mb-1">&nbsp;</label>
+                    <div class="d-grid">
+                        <button type="button" class="btn btn-outline-info btn-sm" id="refreshButton" title="Refresh Chart">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-                    <!-- AI Explanation -->
-                    <div class="card analysis-card">
-                        <div class="card-header">
-                            <h5><i class="fas fa-robot"></i> AI Analysis</h5>
-                        </div>
-                        <div class="card-body">
-                            <div id="aiExplanation" class="mb-3">
-                                <p class="text-muted">Loading AI analysis...</p>
-                            </div>
-                            <div id="technicalIndicators">
-                                <h6>Technical Indicators:</h6>
-                                <div id="indicatorsList">
-                                    <span class="technical-indicator">Loading...</span>
-                                </div>
+        <!-- Detailed Analysis -->
+        <div class="row">
+            <!-- Left Column -->
+            <div class="col-lg-8">
+                <!-- Price Chart -->
+                <div class="chart-container">
+                    <h5><i class="fas fa-chart-area"></i> Price Performance</h5>
+                    <div id="priceChart" style="height: 400px;"></div>
+                </div>
+
+                <!-- Technical Indicators Chart -->
+                <div class="chart-container">
+                    <h5><i class="fas fa-chart-bar"></i> Technical Indicators</h5>
+                    <div id="technicalChart" style="height: 300px;"></div>
+                </div>
+
+                <!-- AI Explanation -->
+                <div class="chart-container">
+                    <h5><i class="fas fa-robot"></i> AI Analysis</h5>
+                    <div id="aiExplanation" class="p-3 bg-light rounded">
+                        <div class="loading-spinner">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading AI analysis...</span>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Right Column -->
-                <div class="col-lg-4">
-                    <!-- Key Metrics -->
-                    <div class="card analysis-card">
-                        <div class="card-header">
-                            <h5><i class="fas fa-chart-pie"></i> Key Metrics</h5>
-                        </div>
-                        <div class="card-body">
-                            <div id="keyMetrics">
-                                <div class="metric-item mb-3">
-                                    <small class="text-muted">Current Price</small>
-                                    <div class="h5 mb-0" id="currentPrice">-</div>
-                                </div>
-                                <div class="metric-item mb-3">
-                                    <small class="text-muted">Change</small>
-                                    <div class="h5 mb-0" id="priceChange">-</div>
-                                </div>
-                                <div class="metric-item mb-3">
-                                    <small class="text-muted">Volume</small>
-                                    <div class="h5 mb-0" id="volume">-</div>
-                                </div>
-                                <div class="metric-item mb-3">
-                                    <small class="text-muted">Market Cap</small>
-                                    <div class="h5 mb-0" id="marketCap">-</div>
-                                </div>
-                            </div>
-                        </div>
+            <!-- Right Column -->
+            <div class="col-lg-4">
+                <!-- Key Metrics -->
+                <div class="chart-container">
+                    <h5><i class="fas fa-tachometer-alt"></i> Key Metrics</h5>
+                    <div id="keyMetrics">
+                        <!-- Metrics will be populated here -->
                     </div>
+                </div>
 
-                    <!-- Risk Assessment -->
-                    <div class="card analysis-card">
-                        <div class="card-header">
-                            <h5><i class="fas fa-shield-alt"></i> Risk Assessment</h5>
-                        </div>
-                        <div class="card-body">
-                            <div id="riskAssessment">
-                                <div class="mb-3">
-                                    <label class="form-label">Volatility</label>
-                                    <div class="progress">
-                                        <div class="progress-bar" id="volatilityBar" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Drawdown Risk</label>
-                                    <div class="progress">
-                                        <div class="progress-bar bg-warning" id="drawdownBar" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                                <div class="mb-3">
-                                    <label class="form-label">Market Correlation</label>
-                                    <div class="progress">
-                                        <div class="progress-bar bg-info" id="correlationBar" style="width: 0%"></div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                <!-- Risk Assessment -->
+                <div class="chart-container">
+                    <h5><i class="fas fa-shield-alt"></i> Risk Assessment</h5>
+                    <div id="riskAssessment">
+                        <!-- Risk metrics will be populated here -->
                     </div>
+                </div>
 
-                    <!-- Trading Signals -->
-                    <div class="card analysis-card">
-                        <div class="card-header">
-                            <h5><i class="fas fa-signal"></i> Trading Signals</h5>
-                        </div>
-                        <div class="card-body">
-                            <div id="tradingSignals">
-                                <div class="signal-item mb-2">
-                                    <span class="badge bg-success">Strong Buy</span>
-                                    <small class="text-muted d-block">MACD Crossover</small>
-                                </div>
-                                <div class="signal-item mb-2">
-                                    <span class="badge bg-warning">Hold</span>
-                                    <small class="text-muted d-block">RSI Neutral</small>
-                                </div>
-                                <div class="signal-item mb-2">
-                                    <span class="badge bg-danger">Sell</span>
-                                    <small class="text-muted d-block">Volume Decline</small>
-                                </div>
-                            </div>
-                        </div>
+                <!-- Trading Signals -->
+                <div class="chart-container">
+                    <h5><i class="fas fa-signal"></i> Trading Signals</h5>
+                    <div id="tradingSignals">
+                        <!-- Trading signals will be populated here -->
                     </div>
                 </div>
             </div>
@@ -284,229 +412,434 @@
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     
-    <!-- Stock Analysis JavaScript -->
     <script>
         class StockAnalysis {
             constructor() {
-                this.symbol = this.getSymbolFromUrl();
-                this.collectionId = this.getCollectionIdFromUrl();
-                this.analysisData = null;
+                this.symbol = this.getUrlParameter('symbol');
+                this.collectionId = this.getUrlParameter('collection');
+                this.currentChartType = 'line';
+                this.currentTimeframe = 'ALL';
+                this.stockData = null;
                 
-                this.init();
+                this.initialize();
             }
             
-            getSymbolFromUrl() {
+            getUrlParameter(name) {
                 const urlParams = new URLSearchParams(window.location.search);
-                return urlParams.get('symbol') || 'AAPL';
+                return urlParams.get(name);
             }
             
-            getCollectionIdFromUrl() {
-                const urlParams = new URLSearchParams(window.location.search);
-                return urlParams.get('collection') || 'ALL_20250803_160817';
-            }
-            
-            async init() {
-                this.updateHeader();
-                await this.loadStockAnalysis();
-            }
-            
-            updateHeader() {
+            async initialize() {
+                if (!this.symbol || !this.collectionId) {
+                    this.showError('Missing symbol or collection ID');
+                    return;
+                }
+                
                 document.getElementById('stockSymbol').textContent = this.symbol;
-                document.getElementById('stockInfo').textContent = `Collection: ${this.collectionId}`;
+                document.getElementById('stockSymbolDisplay').textContent = this.symbol;
+                
+                await this.loadStockData();
+                await this.loadAIAnalysis();
+                this.setupEventListeners();
             }
             
-            async loadStockAnalysis() {
+            async loadStockData() {
                 try {
-                    // Load AI analysis
-                    const analysisResponse = await fetch(`/api/ai-ranking/collection/${this.collectionId}/stock/${this.symbol}`);
-                    const analysisData = await analysisResponse.json();
+                    console.log('Loading stock data for:', this.symbol);
                     
-                    if (analysisData.success) {
-                        this.analysisData = analysisData;
-                        this.displayAnalysis(analysisData);
+                    // Try to get data with indicators first
+                    let response = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${this.symbol}/data-with-indicators`);
+                    let data = await response.json();
+                    
+                    // If no indicators available, fall back to regular data
+                    if (!data.success || !data.indicators_available) {
+                        console.log('No indicators available, fetching regular data');
+                        response = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${this.symbol}`);
+                        data = await response.json();
+                    }
+                    
+                    if (data.success) {
+                        this.stockData = data.data || data.stock_data;
+                        this.displayStockInfo();
+                        this.createPriceChart();
+                        this.displayTechnicalIndicators();
                     } else {
-                        this.showError('Failed to load AI analysis');
+                        this.showError('Failed to load stock data');
                     }
-                    
-                    // Load stock data
-                    const stockResponse = await fetch(`/api/data-collection/collections/${this.collectionId}/symbols/${this.symbol}`);
-                    const stockData = await stockResponse.json();
-                    
-                    if (stockData.success) {
-                        this.displayStockData(stockData);
-                    }
-                    
                 } catch (error) {
-                    console.error('Error loading stock analysis:', error);
-                    this.showError('Error loading stock analysis');
-                } finally {
-                    this.hideLoading();
+                    console.error('Error loading stock data:', error);
+                    this.showError('Error loading stock data: ' + error.message);
                 }
             }
             
-            displayAnalysis(data) {
-                // Update scores
-                const scores = data.scores || {};
-                this.updateScore('totalScore', scores.total_score || 0);
-                this.updateScore('technicalScore', scores.technical_score || 0);
-                this.updateScore('fundamentalScore', scores.fundamental_score || 0);
-                this.updateScore('riskScore', scores.risk_score || 0);
+            async loadAIAnalysis() {
+                try {
+                    const response = await fetch(`/api/ai-ranking/collection/${this.collectionId}/stock/${this.symbol}`);
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.displayAIAnalysis(data.analysis);
+                    } else {
+                        this.showError('Failed to load AI analysis');
+                    }
+                } catch (error) {
+                    console.error('Error loading AI analysis:', error);
+                    this.showError('Error loading AI analysis: ' + error.message);
+                }
+            }
+            
+            displayStockInfo() {
+                if (!this.stockData || this.stockData.length === 0) return;
                 
-                // Update recommendation
-                this.updateRecommendation(scores.total_score || 0);
+                const latest = this.stockData[this.stockData.length - 1];
+                const previous = this.stockData[this.stockData.length - 2] || latest;
                 
-                // Update AI explanation
-                if (data.explanation) {
-                    document.getElementById('aiExplanation').innerHTML = `
+                const currentPrice = latest?.Close || latest?.close || 0;
+                const previousPrice = previous?.Close || previous?.close || currentPrice;
+                const change = currentPrice - previousPrice;
+                const changePercent = previousPrice > 0 ? (change / previousPrice) * 100 : 0;
+                
+                // Display price and change
+                document.getElementById('stockPrice').innerHTML = `$${currentPrice.toFixed(2)}`;
+                
+                const changeElement = document.getElementById('stockChange');
+                const changeClass = change >= 0 ? 'text-success' : 'text-danger';
+                const changeIcon = change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+                changeElement.innerHTML = `
+                    <span class="${changeClass}">
+                        <i class="fas ${changeIcon}"></i>
+                        $${Math.abs(change).toFixed(2)} (${Math.abs(changePercent).toFixed(2)}%)
+                    </span>
+                `;
+                
+                // Display stats
+                const statsContainer = document.getElementById('stockStats');
+                const stats = this.calculateStats();
+                
+                statsContainer.innerHTML = stats.map(stat => `
+                    <div class="stat-item">
+                        <div class="stat-label">${stat.label}</div>
+                        <div class="stat-value">${stat.value}</div>
+                    </div>
+                `).join('');
+                
+                document.getElementById('stockInfo').style.display = 'block';
+            }
+            
+            calculateStats() {
+                if (!this.stockData || this.stockData.length === 0) return [];
+                
+                const prices = this.stockData.map(d => d.Close || d.close).filter(p => p && !isNaN(p));
+                const volumes = this.stockData.map(d => d.Volume || d.volume).filter(v => v && !isNaN(v));
+                
+                const maxPrice = Math.max(...prices);
+                const minPrice = Math.min(...prices);
+                const avgVolume = volumes.length > 0 ? Math.round(volumes.reduce((a, b) => a + b, 0) / volumes.length) : 0;
+                const volatility = this.calculateVolatility(prices);
+                const totalReturn = this.calculateTotalReturn(prices);
+                
+                return [
+                    { label: '52-Week High', value: `$${maxPrice.toFixed(2)}` },
+                    { label: '52-Week Low', value: `$${minPrice.toFixed(2)}` },
+                    { label: 'Avg Volume', value: avgVolume.toLocaleString() },
+                    { label: 'Volatility', value: `${volatility.toFixed(2)}%` },
+                    { label: 'Total Return', value: `${totalReturn >= 0 ? '+' : ''}${totalReturn.toFixed(2)}%` },
+                    { label: 'Data Points', value: this.stockData.length }
+                ];
+            }
+            
+            calculateVolatility(prices) {
+                if (prices.length < 2) return 0;
+                const returns = [];
+                for (let i = 1; i < prices.length; i++) {
+                    returns.push((prices[i] - prices[i-1]) / prices[i-1]);
+                }
+                const mean = returns.reduce((a, b) => a + b, 0) / returns.length;
+                const variance = returns.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / returns.length;
+                return Math.sqrt(variance) * 100;
+            }
+            
+            calculateTotalReturn(prices) {
+                if (prices.length < 2) return 0;
+                const firstPrice = prices[0];
+                const lastPrice = prices[prices.length - 1];
+                return ((lastPrice - firstPrice) / firstPrice) * 100;
+            }
+            
+            displayTechnicalIndicators() {
+                if (!this.stockData || this.stockData.length === 0) return;
+                
+                const columns = Object.keys(this.stockData[0]);
+                const latest = this.stockData[this.stockData.length - 1];
+                
+                const indicatorCategories = {
+                    'Moving Averages': ['sma_20', 'ema_20', 'wma_20', 'hma_20'],
+                    'Momentum': ['rsi_14', 'macd_line_12_26', 'macd_signal_12_26_9', 'macd_histogram_12_26_9', 'stoch_k_14', 'stoch_d_14_3', 'williams_r_14'],
+                    'Volatility': ['bb_upper_20_2.0', 'bb_lower_20_2.0', 'bb_middle_20_2.0', 'atr_14', 'std_dev_20'],
+                    'Volume': ['obv', 'obv_ma_20', 'obv_roc']
+                };
+                
+                const indicatorsContainer = document.getElementById('technicalIndicators');
+                let indicatorsHTML = '<div class="row">';
+                
+                Object.entries(indicatorCategories).forEach(([category, indicators]) => {
+                    const availableIndicators = indicators.filter(indicator => 
+                        columns.includes(indicator) && latest[indicator] !== undefined && !isNaN(latest[indicator])
+                    );
+                    
+                    if (availableIndicators.length > 0) {
+                        indicatorsHTML += `
+                            <div class="col-md-6 mb-3">
+                                <div class="card">
+                                    <div class="card-header">
+                                        <h6 class="mb-0">${category}</h6>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                        `;
+                        
+                        availableIndicators.forEach(indicator => {
+                            const value = latest[indicator];
+                            const formattedValue = this.formatIndicatorValue(indicator, value);
+                            const colorClass = this.getIndicatorColorClass(indicator, value);
+                            
+                            indicatorsHTML += `
+                                <div class="col-6 mb-2">
+                                    <div class="indicator-item">
+                                        <div class="indicator-label">${this.formatIndicatorName(indicator)}</div>
+                                        <div class="indicator-value ${colorClass}">${formattedValue}</div>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        indicatorsHTML += `
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                indicatorsHTML += '</div>';
+                
+                if (indicatorsHTML === '<div class="row"></div>') {
+                    indicatorsHTML = `
                         <div class="alert alert-info">
-                            <i class="fas fa-robot"></i> <strong>AI Analysis:</strong><br>
-                            ${data.explanation}
+                            <i class="fas fa-info-circle"></i> No technical indicators available for this symbol.
                         </div>
                     `;
                 }
                 
-                // Update technical indicators
-                if (data.technical_indicators) {
-                    this.displayTechnicalIndicators(data.technical_indicators);
-                }
+                indicatorsContainer.innerHTML = indicatorsHTML;
+                indicatorsContainer.style.display = 'block';
             }
             
-            updateScore(elementId, score) {
-                const element = document.getElementById(elementId);
-                const indicator = document.getElementById(elementId + 'Indicator');
-                
-                if (element) element.textContent = score.toFixed(1);
-                
-                if (indicator) {
-                    indicator.className = 'score-indicator ' + this.getScoreClass(score);
-                }
-            }
-            
-            getScoreClass(score) {
-                if (score >= 70) return 'score-excellent';
-                if (score >= 60) return 'score-good';
-                if (score >= 50) return 'score-average';
-                return 'score-poor';
-            }
-            
-            updateRecommendation(score) {
-                const badge = document.getElementById('recommendationBadge');
-                let recommendation = 'Hold';
-                let badgeClass = 'bg-warning';
-                
-                if (score >= 70) {
-                    recommendation = 'Strong Buy';
-                    badgeClass = 'bg-success';
-                } else if (score >= 60) {
-                    recommendation = 'Buy';
-                    badgeClass = 'bg-primary';
-                } else if (score < 50) {
-                    recommendation = 'Sell';
-                    badgeClass = 'bg-danger';
-                }
-                
-                badge.className = `recommendation-badge badge ${badgeClass}`;
-                badge.textContent = recommendation;
-            }
-            
-            displayTechnicalIndicators(indicators) {
-                const container = document.getElementById('indicatorsList');
-                container.innerHTML = '';
-                
-                Object.entries(indicators).forEach(([name, value]) => {
-                    const indicator = document.createElement('span');
-                    indicator.className = 'technical-indicator';
-                    indicator.textContent = `${name}: ${value}`;
-                    container.appendChild(indicator);
-                });
-            }
-            
-            displayStockData(data) {
-                if (data.stock_data && data.stock_data.length > 0) {
-                    const latestData = data.stock_data[data.stock_data.length - 1];
-                    
-                    // Update key metrics
-                    document.getElementById('currentPrice').textContent = `$${latestData.Close?.toFixed(2) || 'N/A'}`;
-                    
-                    if (data.stock_data.length > 1) {
-                        const previousData = data.stock_data[data.stock_data.length - 2];
-                        const change = latestData.Close - previousData.Close;
-                        const changePercent = (change / previousData.Close) * 100;
-                        
-                        const changeElement = document.getElementById('priceChange');
-                        changeElement.textContent = `${change >= 0 ? '+' : ''}$${change.toFixed(2)} (${changePercent.toFixed(2)}%)`;
-                        changeElement.className = `h5 mb-0 ${change >= 0 ? 'text-success' : 'text-danger'}`;
-                    }
-                    
-                    document.getElementById('volume').textContent = latestData.Volume?.toLocaleString() || 'N/A';
-                    
-                    // Create price chart
-                    this.createPriceChart(data.stock_data);
-                }
-            }
-            
-            createPriceChart(stockData) {
-                const dates = stockData.map(d => d.Date);
-                const prices = stockData.map(d => d.Close);
-                const volumes = stockData.map(d => d.Volume);
-                
-                const trace1 = {
-                    x: dates,
-                    y: prices,
-                    type: 'scatter',
-                    mode: 'lines+markers',
-                    name: 'Price',
-                    line: { color: '#007bff' }
+            formatIndicatorName(indicator) {
+                const names = {
+                    'sma_20': 'SMA (20)',
+                    'ema_20': 'EMA (20)',
+                    'wma_20': 'WMA (20)',
+                    'hma_20': 'HMA (20)',
+                    'rsi_14': 'RSI (14)',
+                    'macd_line_12_26': 'MACD',
+                    'macd_signal_12_26_9': 'MACD Signal',
+                    'macd_histogram_12_26_9': 'MACD Hist',
+                    'stoch_k_14': 'Stoch %K',
+                    'stoch_d_14_3': 'Stoch %D',
+                    'williams_r_14': 'Williams %R',
+                    'bb_upper_20_2.0': 'BB Upper',
+                    'bb_lower_20_2.0': 'BB Lower',
+                    'bb_middle_20_2.0': 'BB Middle',
+                    'atr_14': 'ATR (14)',
+                    'std_dev_20': 'Std Dev',
+                    'obv': 'OBV',
+                    'obv_ma_20': 'OBV MA',
+                    'obv_roc': 'OBV ROC'
                 };
+                return names[indicator] || indicator;
+            }
+            
+            formatIndicatorValue(indicator, value) {
+                if (value === null || value === undefined || isNaN(value)) return '-';
                 
-                const trace2 = {
-                    x: dates,
-                    y: volumes,
-                    type: 'bar',
-                    name: 'Volume',
-                    yaxis: 'y2',
-                    marker: { color: 'rgba(0,123,255,0.3)' }
+                if (indicator.includes('rsi') || indicator.includes('stoch') || indicator.includes('williams')) {
+                    return value.toFixed(2);
+                } else if (indicator.includes('macd') || indicator.includes('bb') || indicator.includes('atr') || indicator.includes('std_dev')) {
+                    return value.toFixed(4);
+                } else {
+                    return value.toFixed(2);
+                }
+            }
+            
+            getIndicatorColorClass(indicator, value) {
+                if (value === null || value === undefined || isNaN(value)) return '';
+                
+                if (indicator.includes('rsi')) {
+                    if (value > 70) return 'text-danger';
+                    if (value < 30) return 'text-success';
+                    return 'text-warning';
+                } else if (indicator.includes('macd')) {
+                    return value >= 0 ? 'text-success' : 'text-danger';
+                } else if (indicator.includes('stoch') || indicator.includes('williams')) {
+                    if (value > 80) return 'text-danger';
+                    if (value < 20) return 'text-success';
+                    return 'text-warning';
+                }
+                return '';
+            }
+            
+            createPriceChart() {
+                if (!this.stockData || this.stockData.length === 0) return;
+                
+                const filteredData = this.filterDataByTimeframe(this.stockData, this.currentTimeframe);
+                
+                const trace = {
+                    x: filteredData.map(d => d.Date || d.date),
+                    y: filteredData.map(d => d.Close || d.close),
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Price',
+                    line: { color: '#667eea' }
                 };
                 
                 const layout = {
-                    title: `${this.symbol} Price Performance`,
+                    title: `${this.symbol} Price Chart`,
                     xaxis: { title: 'Date' },
                     yaxis: { title: 'Price ($)' },
-                    yaxis2: {
-                        title: 'Volume',
-                        overlaying: 'y',
-                        side: 'right'
-                    },
                     height: 400
                 };
                 
-                Plotly.newPlot('priceChart', [trace1, trace2], layout);
+                Plotly.newPlot('priceChart', [trace], layout);
             }
             
-            hideLoading() {
-                document.getElementById('loadingState').style.display = 'none';
-                document.getElementById('analysisContent').style.display = 'block';
+            filterDataByTimeframe(data, timeframe) {
+                if (timeframe === 'ALL') return data;
+                
+                const now = new Date();
+                let cutoffDate;
+                
+                switch (timeframe) {
+                    case '1M':
+                        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 1, now.getDate());
+                        break;
+                    case '3M':
+                        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
+                        break;
+                    case '6M':
+                        cutoffDate = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
+                        break;
+                    case '1Y':
+                        cutoffDate = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
+                        break;
+                    default:
+                        return data;
+                }
+                
+                return data.filter(d => {
+                    const date = new Date(d.Date || d.date);
+                    return date >= cutoffDate;
+                });
+            }
+            
+            displayAIAnalysis(analysis) {
+                // Update scores
+                if (analysis.scores) {
+                    document.getElementById('technicalScore').textContent = analysis.scores.technical?.toFixed(1) || '-';
+                    document.getElementById('fundamentalScore').textContent = analysis.scores.fundamental?.toFixed(1) || '-';
+                    document.getElementById('marketScore').textContent = analysis.scores.market?.toFixed(1) || '-';
+                    document.getElementById('riskScore').textContent = analysis.scores.risk?.toFixed(1) || '-';
+                    
+                    // Update score indicators
+                    this.updateScoreIndicator('technicalScoreIndicator', analysis.scores.technical);
+                    this.updateScoreIndicator('fundamentalScoreIndicator', analysis.scores.fundamental);
+                    this.updateScoreIndicator('marketScoreIndicator', analysis.scores.market);
+                    this.updateScoreIndicator('riskScoreIndicator', analysis.scores.risk);
+                }
+                
+                // Update recommendation
+                if (analysis.recommendation) {
+                    const badge = document.getElementById('recommendationBadge');
+                    const recommendationClass = this.getRecommendationClass(analysis.recommendation);
+                    badge.className = `recommendation-badge ${recommendationClass}`;
+                    badge.innerHTML = `<i class="fas fa-chart-line"></i> ${analysis.recommendation}`;
+                }
+                
+                // Update explanation
+                if (analysis.explanation) {
+                    document.getElementById('aiExplanation').innerHTML = `
+                        <div class="p-3">
+                            <h6><i class="fas fa-robot"></i> AI Analysis</h6>
+                            <p class="mb-0">${analysis.explanation}</p>
+                        </div>
+                    `;
+                }
+            }
+            
+            updateScoreIndicator(elementId, score) {
+                const element = document.getElementById(elementId);
+                if (!element || score === null || score === undefined) return;
+                
+                element.className = 'score-indicator ';
+                if (score >= 80) element.className += 'score-excellent';
+                else if (score >= 60) element.className += 'score-good';
+                else if (score >= 40) element.className += 'score-average';
+                else element.className += 'score-poor';
+            }
+            
+            getRecommendationClass(recommendation) {
+                const classes = {
+                    'BUY': 'bg-success',
+                    'SELL': 'bg-danger',
+                    'HOLD': 'bg-warning',
+                    'STRONG_BUY': 'bg-success',
+                    'STRONG_SELL': 'bg-danger'
+                };
+                return classes[recommendation] || 'bg-secondary';
+            }
+            
+            setupEventListeners() {
+                // Chart type buttons
+                document.querySelectorAll('[data-chart-type]').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        document.querySelectorAll('[data-chart-type]').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.currentChartType = e.target.dataset.chartType;
+                        this.createPriceChart();
+                    });
+                });
+                
+                // Timeframe buttons
+                document.querySelectorAll('[data-timeframe]').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        document.querySelectorAll('[data-timeframe]').forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                        this.currentTimeframe = e.target.dataset.timeframe;
+                        this.createPriceChart();
+                    });
+                });
+                
+                // Refresh button
+                document.getElementById('refreshButton').addEventListener('click', () => {
+                    this.loadStockData();
+                });
             }
             
             showError(message) {
-                document.getElementById('loadingState').innerHTML = `
-                    <div class="text-center">
-                        <i class="fas fa-exclamation-triangle text-danger" style="font-size: 3em;"></i>
-                        <p class="mt-3 text-danger">${message}</p>
-                    </div>
-                `;
+                console.error(message);
+                // You can implement a more sophisticated error display here
             }
         }
-        
-        // Initialize stock analysis
-        let stockAnalysis;
-        document.addEventListener('DOMContentLoaded', function() {
-            stockAnalysis = new StockAnalysis();
-        });
         
         function goBack() {
             window.history.back();
         }
+        
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new StockAnalysis();
+        });
     </script>
 </body>
 </html> 

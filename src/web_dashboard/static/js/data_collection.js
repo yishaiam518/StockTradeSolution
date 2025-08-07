@@ -1707,6 +1707,9 @@ class DataCollectionManager {
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-info me-2" onclick="dataCollectionManager.openHybridAIRanking('${collectionId}')">
+                                <i class="fas fa-robot me-2"></i>Hybrid Analysis
+                            </button>
                             <button type="button" class="btn btn-primary" onclick="exportAIRankingReport('${collectionId}')">
                                 <i class="fas fa-download"></i> Export Report
                             </button>
@@ -1735,20 +1738,141 @@ class DataCollectionManager {
 
     async loadAIRankingData(collectionId) {
         try {
-            // Fetch AI ranking data for all stocks
-            const response = await fetch(`/api/ai-ranking/collection/${collectionId}/rank?max_stocks=1000`);
+            // First, try to get cached/stored ranking data quickly
+            console.log('Loading AI ranking data for collection:', collectionId);
+            
+            // Show loading state with timeout
+            const loadingElement = document.getElementById('ai-ranking-loading');
+            if (loadingElement) {
+                loadingElement.innerHTML = `
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading available AI ranking data...</p>
+                    <div class="progress mt-3" style="height: 5px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                    </div>
+                `;
+            }
+            
+            // Try to get existing ranking data first (faster)
+            let response = await fetch(`/api/ai-ranking/collection/${collectionId}/rank?max_stocks=50&use_cache=true`);
+            let data = await response.json();
+            
+            if (data.success && data.top_stocks && data.top_stocks.length > 0) {
+                console.log('Found cached ranking data, displaying immediately');
+                this.displayAIRankingResults(data);
+                this.setupRealTimeUpdates(collectionId);
+                return;
+            }
+            
+            // If no cached data, show what we have and start background calculation
+            console.log('No cached data found, starting background calculation');
+            this.showAvailableDataWithBackgroundCalculation(collectionId);
+            
+        } catch (error) {
+            console.error('Error loading AI ranking data:', error);
+            // Show available data even if there's an error
+            this.showAvailableDataWithBackgroundCalculation(collectionId);
+        }
+    }
+    
+    async showAvailableDataWithBackgroundCalculation(collectionId) {
+        try {
+            // Show available data immediately
+            const availableData = {
+                success: true,
+                total_stocks: 0,
+                top_stocks: [],
+                ranking_summary: {
+                    recommendation_summary: {
+                        strong_buy: 0,
+                        hold: 0,
+                        avoid: 0
+                    }
+                },
+                market_analysis: {
+                    regime: 'Loading...',
+                    insight: 'Calculating market analysis...'
+                },
+                educational_content: {
+                    key_insights: ['AI ranking is being calculated in the background...'],
+                    learning_tips: ['Please wait while the system analyzes your stocks...']
+                }
+            };
+            
+            this.displayAIRankingResults(availableData);
+            
+            // Update loading message
+            const loadingElement = document.getElementById('ai-ranking-loading');
+            if (loadingElement) {
+                loadingElement.innerHTML = `
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Background Calculation</strong><br>
+                        AI ranking is being calculated in the background. 
+                        The results will update automatically when ready.
+                        <div class="progress mt-2" style="height: 5px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>
+                        </div>
+                    </div>
+                `;
+                loadingElement.style.display = 'block';
+            }
+            
+            // Start background calculation with timeout
+            this.startBackgroundCalculation(collectionId);
+            
+        } catch (error) {
+            console.error('Error showing available data:', error);
+            this.showAlert('Error loading AI ranking data', 'error');
+        }
+    }
+    
+    async startBackgroundCalculation(collectionId) {
+        try {
+            // Start background calculation with a timeout
+            const timeoutPromise = new Promise((_, reject) => {
+                setTimeout(() => reject(new Error('Calculation timeout')), 30000); // 30 second timeout
+            });
+            
+            const calculationPromise = fetch(`/api/ai-ranking/collection/${collectionId}/rank?max_stocks=100&background=true`);
+            
+            // Race between calculation and timeout
+            const response = await Promise.race([calculationPromise, timeoutPromise]);
             const data = await response.json();
             
             if (data.success) {
-                this.displayAIRankingResults(data);
-                // Set up real-time updates
-                this.setupRealTimeUpdates(collectionId);
-            } else {
-                this.showAlert('Error loading AI ranking data', 'error');
+                console.log('Background calculation completed');
+                this.updateAIRankingGrid(data.top_stocks || []);
+                this.updateMarketAnalysis(data.market_analysis || {});
+                this.updateEducationalContent(data.educational_content || {});
+                
+                // Hide loading
+                const loadingElement = document.getElementById('ai-ranking-loading');
+                if (loadingElement) {
+                    loadingElement.style.display = 'none';
+                }
             }
+            
         } catch (error) {
-            console.error('Error loading AI ranking data:', error);
-            this.showAlert('Error loading AI ranking data', 'error');
+            console.error('Background calculation failed or timed out:', error);
+            
+            // Show timeout message
+            const loadingElement = document.getElementById('ai-ranking-loading');
+            if (loadingElement) {
+                loadingElement.innerHTML = `
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>Calculation Timeout</strong><br>
+                        AI ranking calculation is taking longer than expected. 
+                        You can still view the available data above.
+                        <button class="btn btn-sm btn-primary mt-2" onclick="refreshAIRanking('${collectionId}')">
+                            <i class="fas fa-sync-alt"></i> Retry
+                        </button>
+                    </div>
+                `;
+            }
         }
     }
 
@@ -2238,6 +2362,335 @@ class DataCollectionManager {
         if (container) {
             container.innerHTML = '<p class="text-muted">Performance charts will be displayed here</p>';
         }
+    }
+
+    // Hybrid AI Ranking Methods
+    async loadHybridAIRankingData(collectionId) {
+        try {
+            console.log('Loading hybrid AI ranking data for collection:', collectionId);
+            const loadingElement = document.getElementById('hybrid-ai-ranking-loading');
+            if (loadingElement) {
+                loadingElement.innerHTML = `
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading hybrid AI ranking data...</p>
+                    <div class="progress mt-3" style="height: 5px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                    </div>
+                `;
+            }
+
+            // Try cached data first
+            let response = await fetch(`/api/ai-ranking/collection/${collectionId}/hybrid-rank?max_stocks=20&use_cache=true`);
+            let data = await response.json();
+            
+            if (data.success && data.dual_scores && data.dual_scores.length > 0) {
+                console.log('Found cached hybrid ranking data, displaying immediately');
+                this.displayHybridAIRankingResults(data);
+                return;
+            }
+
+            // If no cached data, load fresh data
+            response = await fetch(`/api/ai-ranking/collection/${collectionId}/hybrid-rank?max_stocks=20`);
+            data = await response.json();
+            
+            if (data.success) {
+                this.displayHybridAIRankingResults(data);
+            } else {
+                this.showHybridError(data.error || 'Failed to load hybrid ranking data');
+            }
+        } catch (error) {
+            console.error('Error loading hybrid AI ranking data:', error);
+            this.showHybridError('Network error while loading hybrid ranking data');
+        }
+    }
+
+    displayHybridAIRankingResults(data) {
+        try {
+            // Hide loading, show content
+            document.getElementById('hybrid-ai-ranking-loading').style.display = 'none';
+            document.getElementById('hybrid-ai-ranking-content').style.display = 'block';
+
+            // Display algorithm performance summary
+            this.displayAlgorithmPerformance(data.algorithm_performance);
+
+            // Display dual scoring table
+            this.displayDualScoringTable(data.dual_scores);
+
+            // Display improvement insights
+            this.displayImprovementInsights(data.improvement_insights);
+
+        } catch (error) {
+            console.error('Error displaying hybrid AI ranking results:', error);
+            this.showHybridError('Error displaying results');
+        }
+    }
+
+    displayAlgorithmPerformance(performance) {
+        const container = document.getElementById('algorithm-performance-summary');
+        
+        if (!performance || Object.keys(performance).length === 0) {
+            container.innerHTML = '<div class="col-12"><p class="text-muted">No performance data available</p></div>';
+            return;
+        }
+
+        const metrics = [
+            {
+                title: 'Average Score Difference',
+                value: performance.average_score_difference || 0,
+                unit: '',
+                color: 'primary',
+                icon: 'fas fa-chart-line'
+            },
+            {
+                title: 'OpenAI Average',
+                value: performance.average_openai_score || 0,
+                unit: '',
+                color: 'success',
+                icon: 'fas fa-robot'
+            },
+            {
+                title: 'Local Average',
+                value: performance.average_local_score || 0,
+                unit: '',
+                color: 'info',
+                icon: 'fas fa-calculator'
+            },
+            {
+                title: 'Algorithm Correlation',
+                value: performance.algorithm_correlation || 0,
+                unit: '',
+                color: 'warning',
+                icon: 'fas fa-link'
+            },
+            {
+                title: 'High Confidence',
+                value: performance.high_confidence_count || 0,
+                unit: ' cases',
+                color: 'success',
+                icon: 'fas fa-check-circle'
+            },
+            {
+                title: 'Divergent Analysis',
+                value: performance.divergent_analysis_count || 0,
+                unit: ' cases',
+                color: 'danger',
+                icon: 'fas fa-exclamation-triangle'
+            }
+        ];
+
+        container.innerHTML = metrics.map(metric => `
+            <div class="col-md-4 col-lg-2 mb-3">
+                <div class="card border-${metric.color} h-100">
+                    <div class="card-body text-center">
+                        <i class="${metric.icon} fa-2x text-${metric.color} mb-2"></i>
+                        <h6 class="card-title">${metric.title}</h6>
+                        <h4 class="text-${metric.color}">${metric.value}${metric.unit}</h4>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    displayDualScoringTable(dualScores) {
+        const tbody = document.getElementById('hybrid-ranking-tbody');
+        
+        if (!dualScores || dualScores.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">No dual scoring data available</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = dualScores.map((score, index) => {
+            const confidenceClass = this.getConfidenceClass(score.confidence_level);
+            const differenceClass = this.getDifferenceClass(score.score_difference);
+            
+            return `
+                <tr>
+                    <td><span class="badge bg-primary">${index + 1}</span></td>
+                    <td><strong>${score.symbol}</strong></td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-success me-2">${score.openai_score}</span>
+                            <i class="fas fa-robot text-success"></i>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="badge bg-info me-2">${score.local_score}</span>
+                            <i class="fas fa-calculator text-info"></i>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-primary">${score.combined_score}</span>
+                    </td>
+                    <td>
+                        <span class="badge ${differenceClass}">${score.score_difference}</span>
+                    </td>
+                    <td>
+                        <span class="badge ${confidenceClass}">${score.confidence_level}</span>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="dataCollectionManager.showStockAnalysis('${score.symbol}')">
+                            <i class="fas fa-chart-bar"></i> View
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    displayImprovementInsights(insights) {
+        const container = document.getElementById('improvement-insights-list');
+        
+        if (!insights || insights.length === 0) {
+            container.innerHTML = '<li class="text-muted">No improvement insights available</li>';
+            return;
+        }
+
+        container.innerHTML = insights.map(insight => `
+            <li class="mb-2">
+                <i class="fas fa-lightbulb text-warning me-2"></i>
+                ${insight}
+            </li>
+        `).join('');
+    }
+
+    getConfidenceClass(confidenceLevel) {
+        switch (confidenceLevel) {
+            case 'High Confidence':
+                return 'bg-success';
+            case 'Medium Confidence':
+                return 'bg-warning';
+            case 'Low Confidence':
+                return 'bg-danger';
+            case 'Divergent Analysis':
+                return 'bg-danger';
+            default:
+                return 'bg-secondary';
+        }
+    }
+
+    getDifferenceClass(difference) {
+        if (difference <= 5) return 'bg-success';
+        if (difference <= 15) return 'bg-warning';
+        return 'bg-danger';
+    }
+
+    showHybridError(message) {
+        document.getElementById('hybrid-ai-ranking-loading').innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5 class="text-danger">Error Loading Hybrid Ranking</h5>
+                <p class="text-muted">${message}</p>
+                <button class="btn btn-primary" onclick="dataCollectionManager.loadHybridAIRankingData('${this.currentCollectionId}')">
+                    <i class="fas fa-redo"></i> Try Again
+                </button>
+            </div>
+        `;
+    }
+
+    showStockAnalysis(symbol) {
+        document.getElementById('analysis-symbol').textContent = symbol;
+        
+        // Load stock analysis data
+        this.loadStockAnalysisData(symbol);
+        
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('stockAnalysisModal'));
+        modal.show();
+    }
+
+    async loadStockAnalysisData(symbol) {
+        try {
+            const container = document.getElementById('stock-analysis-content');
+            container.innerHTML = `
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <p class="mt-3">Loading stock analysis for ${symbol}...</p>
+                </div>
+            `;
+
+            // Load technical indicators and analysis
+            const response = await fetch(`/api/data-collection/collections/ALL_20250803_160817/symbols/${symbol}/analysis`);
+            const data = await response.json();
+
+            if (data.success) {
+                this.displayStockAnalysis(symbol, data);
+            } else {
+                this.showStockAnalysisError(symbol, data.error || 'Failed to load stock analysis');
+            }
+        } catch (error) {
+            console.error('Error loading stock analysis:', error);
+            this.showStockAnalysisError(symbol, 'Network error while loading stock analysis');
+        }
+    }
+
+    displayStockAnalysis(symbol, data) {
+        const container = document.getElementById('stock-analysis-content');
+        
+        container.innerHTML = `
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6><i class="fas fa-chart-line me-2"></i>Technical Indicators</h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-6">
+                                    <p><strong>RSI:</strong> ${data.technical_indicators?.rsi || 'N/A'}</p>
+                                    <p><strong>MACD:</strong> ${data.technical_indicators?.macd || 'N/A'}</p>
+                                </div>
+                                <div class="col-6">
+                                    <p><strong>SMA 20:</strong> ${data.technical_indicators?.sma_20 || 'N/A'}</p>
+                                    <p><strong>SMA 50:</strong> ${data.technical_indicators?.sma_50 || 'N/A'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6><i class="fas fa-robot me-2"></i>AI Analysis</h6>
+                        </div>
+                        <div class="card-body">
+                            <p><strong>OpenAI Score:</strong> ${data.ai_analysis?.openai_score || 'N/A'}</p>
+                            <p><strong>Local Score:</strong> ${data.ai_analysis?.local_score || 'N/A'}</p>
+                            <p><strong>Recommendation:</strong> ${data.ai_analysis?.recommendation || 'N/A'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    showStockAnalysisError(symbol, message) {
+        document.getElementById('stock-analysis-content').innerHTML = `
+            <div class="text-center py-4">
+                <i class="fas fa-exclamation-triangle fa-3x text-danger mb-3"></i>
+                <h5 class="text-danger">Error Loading Stock Analysis</h5>
+                <p class="text-muted">${message}</p>
+            </div>
+        `;
+    }
+
+    openHybridAIRanking(collectionId) {
+        // Close the current AI ranking modal
+        const currentModal = bootstrap.Modal.getInstance(document.getElementById('aiRankingModal'));
+        if (currentModal) {
+            currentModal.hide();
+        }
+
+        // Show the hybrid AI ranking modal
+        const hybridModal = new bootstrap.Modal(document.getElementById('hybridAIRankingModal'));
+        hybridModal.show();
+
+        // Load hybrid ranking data
+        this.loadHybridAIRankingData(collectionId);
     }
 }
 

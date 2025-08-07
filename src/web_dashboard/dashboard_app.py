@@ -1863,13 +1863,190 @@ class DashboardApp:
                     from ..data_collection.integration import DataCollectionAIIntegration
                     self._ai_integration = DataCollectionAIIntegration(self.data_collection_manager)
                 
-                max_stocks = request.args.get('max_stocks', 1000, type=int)  # Default to high number to get all stocks
-                ranking_data = self._ai_integration.get_collection_ranking(collection_id, max_stocks)
+                max_stocks = request.args.get('max_stocks', 100, type=int)  # Reduced default for performance
+                use_cache = request.args.get('use_cache', 'false').lower() == 'true'
+                background = request.args.get('background', 'false').lower() == 'true'
                 
-                if ranking_data['success']:
-                    return jsonify(ranking_data)
-                else:
-                    return jsonify(ranking_data), 500
+                # If using cache, try to get stored ranking first
+                if use_cache:
+                    cached_ranking = self._ai_integration.get_cached_ranking(collection_id)
+                    if cached_ranking and cached_ranking.get('top_stocks'):
+                        self.logger.info(f"Returning cached ranking for collection {collection_id}")
+                        return jsonify(cached_ranking)
+                
+                # If background processing requested, start async calculation
+                if background:
+                    # Start background calculation
+                    import threading
+                    def background_calculation():
+                        try:
+                            self._ai_integration.get_collection_ranking(collection_id, max_stocks)
+                        except Exception as e:
+                            self.logger.error(f"Background calculation error: {e}")
+                    
+                    thread = threading.Thread(target=background_calculation)
+                    thread.daemon = True
+                    thread.start()
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': 'Background calculation started',
+                        'top_stocks': [],
+                        'ranking_summary': {'recommendation_summary': {'strong_buy': 0, 'hold': 0, 'avoid': 0}},
+                        'market_analysis': {'regime': 'Calculating...', 'insight': 'Processing in background...'},
+                        'educational_content': {'key_insights': ['Calculation in progress...'], 'learning_tips': ['Please wait...']}
+                    })
+                
+                # Regular calculation with reduced processing
+                try:
+                    # Limit processing for better performance
+                    ranking_data = self._ai_integration.get_collection_ranking(collection_id, min(max_stocks, 50))
+                    
+                    if ranking_data['success']:
+                        return jsonify(ranking_data)
+                    else:
+                        return jsonify(ranking_data), 500
+                        
+                except Exception as calc_error:
+                    self.logger.warning(f"AI ranking calculation error for collection {collection_id}: {calc_error}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Calculation error - please try again',
+                        'top_stocks': [],
+                        'ranking_summary': {'recommendation_summary': {'strong_buy': 0, 'hold': 0, 'avoid': 0}},
+                        'market_analysis': {'regime': 'Error', 'insight': 'Calculation failed'},
+                        'educational_content': {'key_insights': ['Please try again'], 'learning_tips': ['Check system logs for details']}
+                    }), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting collection ranking: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+        
+        @self.app.route('/api/ai-ranking/collection/<collection_id>/hybrid-rank', methods=['GET'])
+        def get_hybrid_collection_ranking(collection_id):
+            """Get hybrid AI ranking comparing OpenAI vs local algorithms."""
+            try:
+                # Initialize hybrid AI integration if not already done
+                if not hasattr(self, '_hybrid_ai_integration'):
+                    from ..ai_ranking.hybrid_ranking_engine import HybridRankingEngine
+                    self._hybrid_ai_integration = HybridRankingEngine(self.data_collection_manager)
+                
+                max_stocks = request.args.get('max_stocks', 20, type=int)  # Smaller default for hybrid
+                use_cache = request.args.get('use_cache', 'false').lower() == 'true'
+                
+                # If using cache, try to get stored hybrid ranking first
+                if use_cache:
+                    cached_ranking = self._hybrid_ai_integration.get_cached_hybrid_ranking(collection_id)
+                    if cached_ranking and cached_ranking.get('dual_scores'):
+                        self.logger.info(f"Returning cached hybrid ranking for collection {collection_id}")
+                        return jsonify(cached_ranking)
+                
+                # Perform hybrid ranking
+                try:
+                    hybrid_result = self._hybrid_ai_integration.rank_collection_hybrid(collection_id, max_stocks)
+                    
+                    # Convert to JSON-serializable format
+                    response = {
+                        'success': True,
+                        'collection_id': collection_id,
+                        'timestamp': hybrid_result.timestamp.isoformat(),
+                        'total_stocks': hybrid_result.total_stocks,
+                        'dual_scores': [
+                            {
+                                'symbol': score.symbol,
+                                'openai_score': round(score.openai_score, 2),
+                                'local_score': round(score.local_score, 2),
+                                'score_difference': round(score.score_difference, 2),
+                                'confidence_level': score.confidence_level,
+                                'explanation': score.explanation,
+                                'recommendations': score.recommendations,
+                                'combined_score': round((score.openai_score + score.local_score) / 2, 2)
+                            }
+                            for score in hybrid_result.dual_scores
+                        ],
+                        'algorithm_performance': hybrid_result.algorithm_performance,
+                        'improvement_insights': hybrid_result.improvement_insights
+                    }
+                    
+                    # Store in cache
+                    self._hybrid_ai_integration.store_hybrid_ranking_cache(collection_id, response)
+                    
+                    return jsonify(response)
+                    
+                except Exception as calc_error:
+                    self.logger.warning(f"Hybrid ranking calculation error for collection {collection_id}: {calc_error}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Hybrid calculation error - please try again',
+                        'dual_scores': [],
+                        'algorithm_performance': {},
+                        'improvement_insights': ['Calculation failed']
+                    }), 500
+                    
+            except Exception as e:
+                self.logger.error(f"Error getting hybrid collection ranking: {e}")
+                return jsonify({'success': False, 'error': str(e)}), 500
+            """Get AI-powered ranking for a specific collection."""
+            try:
+                # Initialize AI integration if not already done
+                if not hasattr(self, '_ai_integration'):
+                    from ..data_collection.integration import DataCollectionAIIntegration
+                    self._ai_integration = DataCollectionAIIntegration(self.data_collection_manager)
+                
+                max_stocks = request.args.get('max_stocks', 100, type=int)  # Reduced default for performance
+                use_cache = request.args.get('use_cache', 'false').lower() == 'true'
+                background = request.args.get('background', 'false').lower() == 'true'
+                
+                # If using cache, try to get stored ranking first
+                if use_cache:
+                    cached_ranking = self._ai_integration.get_cached_ranking(collection_id)
+                    if cached_ranking and cached_ranking.get('top_stocks'):
+                        self.logger.info(f"Returning cached ranking for collection {collection_id}")
+                        return jsonify(cached_ranking)
+                
+                # If background processing requested, start async calculation
+                if background:
+                    # Start background calculation
+                    import threading
+                    def background_calculation():
+                        try:
+                            self._ai_integration.get_collection_ranking(collection_id, max_stocks)
+                        except Exception as e:
+                            self.logger.error(f"Background calculation error: {e}")
+                    
+                    thread = threading.Thread(target=background_calculation)
+                    thread.daemon = True
+                    thread.start()
+                    
+                    return jsonify({
+                        'success': True,
+                        'message': 'Background calculation started',
+                        'top_stocks': [],
+                        'ranking_summary': {'recommendation_summary': {'strong_buy': 0, 'hold': 0, 'avoid': 0}},
+                        'market_analysis': {'regime': 'Calculating...', 'insight': 'Processing in background...'},
+                        'educational_content': {'key_insights': ['Calculation in progress...'], 'learning_tips': ['Please wait...']}
+                    })
+                
+                # Regular calculation with reduced processing
+                try:
+                    # Limit processing for better performance
+                    ranking_data = self._ai_integration.get_collection_ranking(collection_id, min(max_stocks, 50))
+                    
+                    if ranking_data['success']:
+                        return jsonify(ranking_data)
+                    else:
+                        return jsonify(ranking_data), 500
+                        
+                except Exception as calc_error:
+                    self.logger.warning(f"AI ranking calculation error for collection {collection_id}: {calc_error}")
+                    return jsonify({
+                        'success': False,
+                        'error': 'Calculation error - please try again',
+                        'top_stocks': [],
+                        'ranking_summary': {'recommendation_summary': {'strong_buy': 0, 'hold': 0, 'avoid': 0}},
+                        'market_analysis': {'regime': 'Error', 'insight': 'Calculation failed'},
+                        'educational_content': {'key_insights': ['Please try again'], 'learning_tips': ['Check system logs for details']}
+                    }), 500
                     
             except Exception as e:
                 self.logger.error(f"Error getting collection ranking: {e}")
