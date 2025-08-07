@@ -92,6 +92,10 @@ class DashboardApp:
         # Setup routes
         self._setup_routes()
         
+        # Register portfolio API blueprint
+        from .portfolio_api import portfolio_api
+        self.app.register_blueprint(portfolio_api, url_prefix='/api')
+        
                 # Configure Flask to serve static files with correct MIME types
         self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
@@ -128,7 +132,7 @@ class DashboardApp:
         @self.app.route('/data-collection')
         def data_collection():
             """Data Collection page"""
-            return render_template('data_collection_clean.html')
+            return render_template('data_collection.html')
         
         @self.app.route('/stock-analysis')
         def stock_analysis():

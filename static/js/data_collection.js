@@ -10,6 +10,87 @@ function updateCollection(collectionId) {
     }
 }
 
+// Portfolio functions
+function buyStock(symbol) {
+    console.log('Buy stock:', symbol);
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.buyStock(symbol);
+    } else {
+        console.error('dataCollectionManager not found');
+        alert('Portfolio system not initialized. Please refresh the page.');
+    }
+}
+
+function sellStock(symbol) {
+    console.log('Sell stock:', symbol);
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.sellStock(symbol);
+    } else {
+        console.error('dataCollectionManager not found');
+        alert('Portfolio system not initialized. Please refresh the page.');
+    }
+}
+
+function buyStockFromAnalysis() {
+    const symbol = document.getElementById('analysis-symbol').textContent;
+    console.log('Buy stock from analysis:', symbol);
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.buyStockFromAnalysis(symbol);
+    }
+}
+
+function sellStockFromAnalysis() {
+    const symbol = document.getElementById('analysis-symbol').textContent;
+    console.log('Sell stock from analysis:', symbol);
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.sellStockFromAnalysis(symbol);
+    }
+}
+
+function executeTrade(action) {
+    const symbol = document.getElementById('analysis-symbol').textContent;
+    const shares = document.getElementById('trade-shares').value;
+    const price = document.getElementById('trade-price').value;
+    const notes = document.getElementById('trade-notes').value;
+    
+    console.log('Execute trade:', { action, symbol, shares, price, notes });
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.executeTrade(action, symbol, shares, price, notes);
+    }
+}
+
+function cancelTrade() {
+    document.getElementById('quick-trade-form').style.display = 'none';
+}
+
+function openUserPortfolioModal() {
+    console.log('Open user portfolio modal');
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openUserPortfolioModal();
+    }
+}
+
+function openAIPortfolioModal() {
+    console.log('Open AI portfolio modal');
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openAIPortfolioModal();
+    }
+}
+
+function openAIRankingModal() {
+    console.log('Open AI ranking modal');
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openAIRankingModal();
+    }
+}
+
+function viewStockAnalysis(symbol) {
+    console.log('View stock analysis for:', symbol);
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.viewStockAnalysis(symbol);
+    }
+}
+
 function refreshAIRanking(collectionId) {
     if (window.dataCollectionManager) {
         window.dataCollectionManager.refreshAIRankingData(collectionId);
@@ -92,6 +173,31 @@ function openPerformanceAnalytics(collectionId) {
 function openAIRanking(collectionId) {
     if (window.dataCollectionManager) {
         window.dataCollectionManager.openAIRanking(collectionId);
+    }
+}
+
+// Portfolio functions
+function buyStock(symbol) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openBuyStockModal(symbol);
+    }
+}
+
+function sellStock(symbol) {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openSellStockModal(symbol);
+    }
+}
+
+function openUserPortfolioModal() {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openUserPortfolioModal();
+    }
+}
+
+function openAIPortfolioModal() {
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openAIPortfolioModal();
     }
 }
 
@@ -189,7 +295,7 @@ class DataCollectionManager {
 
     displayCollections(collections) {
         console.log('displayCollections called with:', collections);
-        const container = document.getElementById('collectionsContainer');
+        const container = document.getElementById('collectionsList');
         console.log('Container found:', container);
         if (!container) {
             console.error('Container not found');
@@ -1381,17 +1487,46 @@ class DataCollectionManager {
 
     async openAIRanking(collectionId) {
         try {
+            console.log('openAIRanking called with collectionId:', collectionId);
+            
             // Get collection details
+            console.log('Fetching collection details...');
             const response = await fetch(`/api/data-collection/collections/${collectionId}`);
             const collection = await response.json();
+            console.log('Collection details:', collection);
             
             if (!collection.success) {
+                console.error('Collection details failed:', collection);
                 this.showAlert('Error loading collection details', 'error');
                 return;
             }
 
-            // Create and show AI ranking modal
-            this.showAIRankingModal(collectionId, collection);
+            // Use the existing static modal instead of creating a dynamic one
+            console.log('Opening hybrid modal...');
+            const modalElement = document.getElementById('hybridAIRankingModal');
+            console.log('Modal element found:', modalElement);
+            
+            if (modalElement) {
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+                console.log('Modal opened successfully');
+            } else {
+                console.error('Modal element not found!');
+                return;
+            }
+            
+            // Load AI ranking data
+            console.log('Loading AI ranking data...');
+            console.log('About to call loadAIRankingData with collectionId:', collectionId);
+            // Add a small delay to ensure modal content is rendered
+            setTimeout(() => {
+                console.log('Calling loadAIRankingData with collectionId:', collectionId);
+                this.loadAIRankingData(collectionId);
+            }, 100);
+            
+            // Load portfolio summary data
+            console.log('Loading portfolio summary...');
+            this.loadPortfolioSummary();
 
         } catch (error) {
             console.error('Error opening AI ranking:', error);
@@ -1638,6 +1773,80 @@ class DataCollectionManager {
                                         </div>
                                     </div>
 
+                                    <!-- Portfolio Management Section -->
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <div class="card border-success">
+                                                <div class="card-header bg-success text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-briefcase me-2"></i>Portfolio Management</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-primary btn-lg" onclick="openUserPortfolioModal()">
+                                                                    <i class="fas fa-user me-2"></i>User Portfolio
+                                                                    <br><small class="text-white-50">Manage your personal portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-info btn-lg" onclick="openAIPortfolioModal()">
+                                                                    <i class="fas fa-robot me-2"></i>AI Portfolio
+                                                                    <br><small class="text-white-50">AI-managed portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Portfolio Summary -->
+                                                    <div class="row mt-3">
+                                                        <div class="col-12">
+                                                            <div class="card border-info">
+                                                                <div class="card-header bg-info text-white">
+                                                                    <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Portfolio Summary</h6>
+                                                                </div>
+                                                                <div class="card-body">
+                                                                    <div class="row" id="portfolio-summary">
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">User Portfolio</h6>
+                                                                                <h4 class="text-primary" id="user-portfolio-value">$0.00</h4>
+                                                                                <small class="text-muted" id="user-portfolio-pnl">P&L: $0.00 (0.00%)</small>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">AI Portfolio</h6>
+                                                                                <h4 class="text-info" id="ai-portfolio-value">$0.00</h4>
+                                                                                <small class="text-muted" id="ai-portfolio-pnl">P&L: $0.00 (0.00%)</small>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">Total Positions</h6>
+                                                                                <h4 class="text-success" id="total-positions">0</h4>
+                                                                                <small class="text-muted">Active positions</small>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">Today's Trades</h6>
+                                                                                <h4 class="text-warning" id="today-trades">0</h4>
+                                                                                <small class="text-muted">Trades today</small>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- Enhanced Stocks Table with Syncfusion Grid -->
                                     <div class="card mb-4">
                                         <div class="card-header d-flex justify-content-between align-items-center">
@@ -1740,46 +1949,72 @@ class DataCollectionManager {
 
         // Load AI ranking data
         this.loadAIRankingData(collectionId);
+        
+        // Load portfolio summary data
+        this.loadPortfolioSummary();
     }
 
     async loadAIRankingData(collectionId) {
         try {
-            console.log('Loading AI ranking data with hybrid approach...');
+            console.log('CORRECT FUNCTION: Loading AI ranking data with hybrid approach...');
+            console.log('CORRECT FUNCTION: Collection ID:', collectionId);
             
-            // Show loading state
-            const loadingElement = document.getElementById('ai-ranking-loading');
-            if (loadingElement) {
-                loadingElement.innerHTML = `
-                    <div class="spinner-border text-primary" role="status">
-                        <span class="visually-hidden">Loading...</span>
-                    </div>
-                    <p class="mt-3">Loading AI ranking data...</p>
-                    <div class="progress mt-3" style="height: 5px;">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
-                    </div>
-                    <small class="text-muted">Loading comprehensive AI analysis with dual scoring...</small>
-                `;
+            // Try to show loading state, but don't fail if element not found
+            try {
+                const loadingElement = document.getElementById('hybrid-ai-ranking-loading');
+                console.log('Loading element found:', loadingElement);
+                if (loadingElement) {
+                    loadingElement.innerHTML = `
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3">Loading AI ranking data...</p>
+                        <div class="progress mt-3" style="height: 5px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted">Loading comprehensive AI analysis with dual scoring...</small>
+                    `;
+                    console.log('Loading state set');
+                } else {
+                    console.error('Loading element not found!');
+                    console.log('Available elements in modal:');
+                    const modal = document.getElementById('hybridAIRankingModal');
+                    if (modal) {
+                        console.log('Modal children:', modal.children);
+                        const allDivs = modal.querySelectorAll('div');
+                        console.log('All divs in modal:', allDivs);
+                    }
+                }
+            } catch (loadingError) {
+                console.error('Error setting loading state:', loadingError);
+                // Continue anyway - the API call might still work
             }
             
             // Load hybrid data directly
+            console.log('Making API call to:', `/api/ai-ranking/collection/${collectionId}/hybrid-rank?max_stocks=112`);
             const response = await fetch(`/api/ai-ranking/collection/${collectionId}/hybrid-rank?max_stocks=112`);
+            console.log('API Response status:', response.status);
             const data = await response.json();
             
-            console.log('API Response:', data);
+            console.log('API Response data:', data);
+            
+            // Check if we have the loading element now
+            const loadingElementAfterAPI = document.getElementById('hybrid-ai-ranking-loading');
+            console.log('Loading element after API call:', loadingElementAfterAPI);
             
             if (data.success && data.dual_scores && data.dual_scores.length > 0) {
                 console.log('Hybrid data loaded, displaying results');
                 console.log('First item:', data.dual_scores[0]);
+                console.log('Total dual scores:', data.dual_scores.length);
                 
                 // Display hybrid results
+                console.log('Calling displayHybridAIRankingResults...');
                 this.displayHybridAIRankingResults(data);
-                
-                // Hide loading
-                if (loadingElement) {
-                    loadingElement.style.display = 'none';
-                }
             } else {
                 console.error('Failed to load hybrid data:', data);
+                console.error('Success:', data.success);
+                console.error('Dual scores:', data.dual_scores);
+                console.error('Dual scores length:', data.dual_scores ? data.dual_scores.length : 'undefined');
                 this.showAlert('Error loading AI ranking data', 'error');
             }
         } catch (error) {
@@ -1921,8 +2156,28 @@ class DataCollectionManager {
     displayHybridAIRankingResults(data) {
         console.log('Displaying hybrid AI ranking results:', data);
         
-        // Show results (don't hide loading for background updates)
-        document.getElementById('ai-ranking-results').style.display = 'block';
+        // Try to hide loading and show results, but don't fail if elements not found
+        try {
+            // Hide loading first
+            const loadingElement = document.getElementById('hybrid-ai-ranking-loading');
+            if (loadingElement) {
+                loadingElement.style.display = 'none';
+                console.log('Loading element hidden');
+            } else {
+                console.log('Loading element not found for hiding');
+            }
+            
+            // Show results
+            const resultsElement = document.getElementById('hybrid-ai-ranking-content');
+            if (resultsElement) {
+                resultsElement.style.display = 'block';
+                console.log('Results element shown');
+            } else {
+                console.error('Results element not found');
+            }
+        } catch (displayError) {
+            console.error('Error in display logic:', displayError);
+        }
 
         // Update summary statistics for hybrid data
         const dualScores = data.dual_scores || [];
@@ -1931,7 +2186,11 @@ class DataCollectionManager {
         console.log('Dual scores count:', totalStocks);
         console.log('First dual score:', dualScores[0]);
         
-        document.getElementById('total-stocks-count').textContent = totalStocks;
+        // Update summary statistics if element exists
+        const totalStocksElement = document.getElementById('total-stocks-count');
+        if (totalStocksElement) {
+            totalStocksElement.textContent = totalStocks;
+        }
         
         // Calculate recommendation counts from dual scores
         let strongBuy = 0, hold = 0, avoid = 0;
@@ -1942,9 +2201,21 @@ class DataCollectionManager {
             else avoid++;
         });
         
-        document.getElementById('strong-buy-count').textContent = strongBuy;
-        document.getElementById('hold-count').textContent = hold;
-        document.getElementById('avoid-count').textContent = avoid;
+        // Update recommendation counts if elements exist
+        const strongBuyElement = document.getElementById('strong-buy-count');
+        if (strongBuyElement) {
+            strongBuyElement.textContent = strongBuy;
+        }
+        
+        const holdElement = document.getElementById('hold-count');
+        if (holdElement) {
+            holdElement.textContent = hold;
+        }
+        
+        const avoidElement = document.getElementById('avoid-count');
+        if (avoidElement) {
+            avoidElement.textContent = avoid;
+        }
 
         // Initialize Syncfusion Grid with dual scores
         console.log('Total dual scores to display:', dualScores.length);
@@ -2005,7 +2276,7 @@ class DataCollectionManager {
     }
 
     createSyncfusionGrid(stocks) {
-        const gridElement = document.getElementById('ai-ranking-grid');
+        const gridElement = document.getElementById('hybrid-ranking-table');
         if (!gridElement) return;
 
         console.log('Creating Syncfusion Grid with', stocks.length, 'stocks');
@@ -2159,11 +2430,19 @@ class DataCollectionManager {
                 {
                     field: 'actions',
                     headerText: 'Actions',
-                    width: 100,
+                    width: 200,
                     allowSorting: false,
-                    template: (data) => `<button class="btn btn-sm btn-outline-primary" onclick="viewStockAnalysis('${data.symbol}')">
-                                            <i class="fas fa-chart-line"></i> View
-                                        </button>`
+                    template: (data) => `<div class="btn-group btn-group-sm" role="group">
+                                            <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${data.symbol}')" title="View Analysis">
+                                                <i class="fas fa-chart-line"></i>
+                                            </button>
+                                            <button class="btn btn-outline-success" onclick="buyStock('${data.symbol}')" title="Buy Stock">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                            <button class="btn btn-outline-warning" onclick="sellStock('${data.symbol}')" title="Sell Stock">
+                                                <i class="fas fa-minus"></i>
+                                            </button>
+                                        </div>`
                 }
             ],
             toolbar: ['Search', 'Print', 'ExcelExport', 'PdfExport'],
@@ -2202,7 +2481,7 @@ class DataCollectionManager {
     }
 
     createFallbackTable(stocks) {
-        const gridElement = document.getElementById('ai-ranking-grid');
+        const gridElement = document.getElementById('hybrid-ranking-table');
         if (!gridElement) return;
 
         console.log('Creating fallback table with', stocks.length, 'stocks');
@@ -2275,9 +2554,17 @@ class DataCollectionManager {
                                 <td><span class="badge ${this.getRecommendationBadgeClass(stock.total_score)}">${this.getRecommendation(stock.total_score)}</span></td>
                                 <td><small class="text-muted">${stock.explanation}</small></td>
                                 <td>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')">
-                                        <i class="fas fa-chart-line"></i> View
-                                    </button>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')" title="View Analysis">
+                                            <i class="fas fa-chart-line"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="buyStock('${stock.symbol}')" title="Buy Stock">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="sellStock('${stock.symbol}')" title="Sell Stock">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
                                 </td>
                             </tr>
                         `).join('')}
@@ -2395,11 +2682,19 @@ class DataCollectionManager {
                 <td>
                     <small class="text-muted">${stock.explanation}</small>
                 </td>
-                <td>
-                    <button class="btn btn-sm btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')">
-                        <i class="fas fa-chart-line"></i> View
-                    </button>
-                </td>
+                                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')" title="View Analysis">
+                                            <i class="fas fa-chart-line"></i>
+                                        </button>
+                                        <button class="btn btn-outline-success" onclick="buyStock('${stock.symbol}')" title="Buy Stock">
+                                            <i class="fas fa-plus"></i>
+                                        </button>
+                                        <button class="btn btn-outline-warning" onclick="sellStock('${stock.symbol}')" title="Sell Stock">
+                                            <i class="fas fa-minus"></i>
+                                        </button>
+                                    </div>
+                                </td>
             `;
             tbody.appendChild(row);
         });
@@ -2627,6 +2922,417 @@ class DataCollectionManager {
         const container = document.getElementById(containerId);
         if (container) {
             container.innerHTML = '<p class="text-muted">Performance charts will be displayed here</p>';
+        }
+    }
+
+    // Portfolio Management Methods
+    async buyStock(symbol) {
+        console.log('Buying stock:', symbol);
+        try {
+            // Get user portfolio (assuming portfolio ID 1 is user portfolio)
+            const response = await fetch('/api/portfolios/1/buy', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    symbol: symbol,
+                    shares: 100, // Default shares
+                    notes: 'Buy from AI ranking'
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                this.showAlert(`Successfully bought ${symbol}`, 'success');
+            } else {
+                this.showAlert(`Failed to buy ${symbol}: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Error buying stock:', error);
+            this.showAlert(`Error buying ${symbol}`, 'danger');
+        }
+    }
+
+    async sellStock(symbol) {
+        console.log('Selling stock:', symbol);
+        try {
+            // Get user portfolio (assuming portfolio ID 1 is user portfolio)
+            const response = await fetch('/api/portfolios/1/sell', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    symbol: symbol,
+                    shares: 100, // Default shares
+                    notes: 'Sell from AI ranking'
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                this.showAlert(`Successfully sold ${symbol}`, 'success');
+            } else {
+                this.showAlert(`Failed to sell ${symbol}: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Error selling stock:', error);
+            this.showAlert(`Error selling ${symbol}`, 'danger');
+        }
+    }
+
+    buyStockFromAnalysis(symbol) {
+        console.log('Buy stock from analysis:', symbol);
+        // Show the quick trade form
+        const tradeForm = document.getElementById('quick-trade-form');
+        if (tradeForm) {
+            tradeForm.style.display = 'block';
+            // Set default values
+            const sharesInput = document.getElementById('trade-shares');
+            const notesInput = document.getElementById('trade-notes');
+            if (sharesInput) sharesInput.value = 100;
+            if (notesInput) notesInput.value = `Buy ${symbol} from analysis`;
+        }
+    }
+
+    sellStockFromAnalysis(symbol) {
+        console.log('Sell stock from analysis:', symbol);
+        // Show the quick trade form
+        const tradeForm = document.getElementById('quick-trade-form');
+        if (tradeForm) {
+            tradeForm.style.display = 'block';
+            // Set default values
+            const sharesInput = document.getElementById('trade-shares');
+            const notesInput = document.getElementById('trade-notes');
+            if (sharesInput) sharesInput.value = 100;
+            if (notesInput) notesInput.value = `Sell ${symbol} from analysis`;
+        }
+    }
+
+    async executeTrade(action, symbol, shares, price, notes) {
+        console.log('Execute trade:', { action, symbol, shares, price, notes });
+        try {
+            const portfolioId = 1; // User portfolio
+            const endpoint = action === 'buy' ? 'buy' : 'sell';
+            
+            const response = await fetch(`/api/portfolios/${portfolioId}/${endpoint}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    symbol: symbol,
+                    shares: parseInt(shares),
+                    price: price ? parseFloat(price) : null, // null for auto-fetch
+                    notes: notes
+                })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                this.showAlert(`Successfully ${action}ed ${shares} shares of ${symbol}`, 'success');
+                // Hide the trade form
+                const tradeForm = document.getElementById('quick-trade-form');
+                if (tradeForm) tradeForm.style.display = 'none';
+            } else {
+                this.showAlert(`Failed to ${action} ${symbol}: ${result.error}`, 'danger');
+            }
+        } catch (error) {
+            console.error('Error executing trade:', error);
+            this.showAlert(`Error ${action}ing ${symbol}`, 'danger');
+        }
+    }
+
+    async openUserPortfolioModal() {
+        console.log('Opening user portfolio modal');
+        try {
+            const response = await fetch('/api/portfolios/1');
+            const result = await response.json();
+            
+            if (result.success) {
+                // Create and show portfolio modal
+                this.showPortfolioModal(result.portfolio, 'User Portfolio');
+            } else {
+                this.showAlert('Failed to load user portfolio', 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading user portfolio:', error);
+            this.showAlert('Error loading user portfolio', 'danger');
+        }
+    }
+
+    async openAIPortfolioModal() {
+        console.log('Opening AI portfolio modal');
+        try {
+            const response = await fetch('/api/portfolios/2');
+            const result = await response.json();
+            
+            if (result.success) {
+                // Create and show portfolio modal
+                this.showPortfolioModal(result.portfolio, 'AI Portfolio');
+            } else {
+                this.showAlert('Failed to load AI portfolio', 'danger');
+            }
+        } catch (error) {
+            console.error('Error loading AI portfolio:', error);
+            this.showAlert('Error loading AI portfolio', 'danger');
+        }
+    }
+
+    showPortfolioModal(portfolio, title) {
+        // Create a simple portfolio modal
+        const modalHtml = `
+            <div class="modal fade" id="portfolioModal" tabindex="-1">
+                <div class="modal-dialog modal-lg">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title">${title}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Portfolio Summary</h6>
+                                    <p><strong>Total Value:</strong> $${portfolio.summary?.total_value?.toFixed(2) || '0.00'}</p>
+                                    <p><strong>Cash:</strong> $${portfolio.summary?.cash?.toFixed(2) || '0.00'}</p>
+                                    <p><strong>Positions:</strong> ${portfolio.summary?.positions_count || 0}</p>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Performance</h6>
+                                    <p><strong>Total P&L:</strong> $${portfolio.summary?.total_pnl?.toFixed(2) || '0.00'}</p>
+                                    <p><strong>P&L %:</strong> ${portfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Remove existing modal if any
+        const existingModal = document.getElementById('portfolioModal');
+        if (existingModal) {
+            existingModal.remove();
+        }
+        
+        // Add modal to body
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('portfolioModal'));
+        modal.show();
+    }
+
+    async openAIRankingModal() {
+        console.log('Opening AI ranking modal');
+        try {
+            // Show the AI ranking modal
+            const modal = new bootstrap.Modal(document.getElementById('aiRankingModal'));
+            modal.show();
+            
+            // Load AI ranking data
+            await this.loadAIRankingData();
+            
+        } catch (error) {
+            console.error('Error opening AI ranking modal:', error);
+            this.showAlert('Error opening AI ranking modal', 'danger');
+        }
+    }
+
+    async _loadLegacyAIRankingData() {
+        console.log('Loading legacy AI ranking data');
+        try {
+            // Show loading state - use hybrid modal elements
+            const loadingElement = document.getElementById('hybrid-ai-ranking-loading');
+            const contentElement = document.getElementById('hybrid-ai-ranking-content');
+            
+            if (loadingElement) {
+                loadingElement.style.display = 'block';
+            }
+            if (contentElement) {
+                contentElement.style.display = 'none';
+            }
+            
+            // Get the latest collection
+            const collectionsResponse = await fetch('/api/data-collection/collections');
+            const collectionsData = await collectionsResponse.json();
+            
+            if (!collectionsData.success || collectionsData.collections.length === 0) {
+                throw new Error('No collections available');
+            }
+            
+            const latestCollection = collectionsData.collections[0];
+            console.log('Using collection:', latestCollection.id);
+            
+            // Load AI ranking data
+            const response = await fetch(`/api/ai-ranking/collection/${latestCollection.id}/hybrid-rank?max_stocks=20`);
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayAIRankingData(data);
+                this.loadPortfolioSummary();
+            } else {
+                throw new Error('Failed to load AI ranking data');
+            }
+            
+        } catch (error) {
+            console.error('Error loading AI ranking data:', error);
+            this.showAlert('Error loading AI ranking data', 'danger');
+        } finally {
+            // Hide loading state - use hybrid modal elements
+            const loadingElement = document.getElementById('hybrid-ai-ranking-loading');
+            const contentElement = document.getElementById('hybrid-ai-ranking-content');
+            
+            if (loadingElement) {
+                loadingElement.style.display = 'none';
+            }
+            if (contentElement) {
+                contentElement.style.display = 'block';
+            }
+        }
+    }
+
+    displayAIRankingData(data) {
+        console.log('Displaying AI ranking data:', data);
+        
+        const tbody = document.getElementById('hybrid-ranking-tbody');
+        if (!tbody) {
+            console.error('AI ranking table body not found');
+            console.log('Available elements:');
+            const modal = document.getElementById('hybridAIRankingModal');
+            if (modal) {
+                const allTbody = modal.querySelectorAll('tbody');
+                console.log('All tbody elements:', allTbody);
+            }
+            return;
+        }
+        
+        tbody.innerHTML = '';
+        
+        if (data.dual_scores && data.dual_scores.length > 0) {
+            data.dual_scores.forEach((stock, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td><strong>${stock.symbol}</strong></td>
+                    <td>${stock.openai_score?.toFixed(1) || 'N/A'}</td>
+                    <td>${stock.local_score?.toFixed(1) || 'N/A'}</td>
+                    <td>${stock.combined_score?.toFixed(1) || 'N/A'}</td>
+                    <td>${Math.abs(stock.openai_score - stock.local_score)?.toFixed(1) || 'N/A'}</td>
+                    <td>
+                        <span class="badge bg-${this.getConfidenceColor(stock.confidence_level)}">
+                            ${stock.confidence_level}
+                        </span>
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')" title="View Analysis">
+                                <i class="fas fa-chart-line"></i>
+                            </button>
+                            <button class="btn btn-outline-success" onclick="buyStock('${stock.symbol}')" title="Buy Stock">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                            <button class="btn btn-outline-warning" onclick="sellStock('${stock.symbol}')" title="Sell Stock">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="8" class="text-center">No AI ranking data available</td></tr>';
+        }
+    }
+
+    getRecommendationColor(recommendation) {
+        if (recommendation.includes('Buy')) return 'success';
+        if (recommendation.includes('Sell')) return 'danger';
+        if (recommendation.includes('Hold')) return 'warning';
+        return 'secondary';
+    }
+
+    getConfidenceColor(confidence) {
+        if (confidence.includes('High')) return 'success';
+        if (confidence.includes('Medium')) return 'warning';
+        if (confidence.includes('Low')) return 'danger';
+        return 'secondary';
+    }
+
+    async loadPortfolioSummary() {
+        try {
+            // Load portfolio summaries
+            const response = await fetch('/api/portfolios');
+            const data = await response.json();
+            
+            if (data.success && data.portfolios.length > 0) {
+                // Update portfolio summary display
+                const userPortfolio = data.portfolios.find(p => p.type === 'USER');
+                const aiPortfolio = data.portfolios.find(p => p.type === 'AI');
+                
+                if (userPortfolio) {
+                    document.getElementById('user-portfolio-value').textContent = `$${userPortfolio.summary?.total_value?.toFixed(2) || '0.00'}`;
+                    document.getElementById('user-portfolio-pnl').textContent = `P&L: $${userPortfolio.summary?.total_pnl?.toFixed(2) || '0.00'} (${userPortfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%)`;
+                }
+                
+                if (aiPortfolio) {
+                    document.getElementById('ai-portfolio-value').textContent = `$${aiPortfolio.summary?.total_value?.toFixed(2) || '0.00'}`;
+                    document.getElementById('ai-portfolio-pnl').textContent = `P&L: $${aiPortfolio.summary?.total_pnl?.toFixed(2) || '0.00'} (${aiPortfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%)`;
+                }
+                
+                // Update total positions and today's trades
+                const totalPositions = (userPortfolio?.summary?.positions_count || 0) + (aiPortfolio?.summary?.positions_count || 0);
+                document.getElementById('total-positions').textContent = totalPositions;
+                
+                // For now, set today's trades to 0 (could be enhanced later)
+                document.getElementById('today-trades').textContent = '0';
+            }
+        } catch (error) {
+            console.error('Error loading portfolio summary:', error);
+        }
+    }
+
+    async viewStockAnalysis(symbol) {
+        console.log('Viewing stock analysis for:', symbol);
+        try {
+            // Get the latest collection
+            const collectionsResponse = await fetch('/api/data-collection/collections');
+            const collectionsData = await collectionsResponse.json();
+            
+            if (!collectionsData.success || collectionsData.collections.length === 0) {
+                throw new Error('No collections available');
+            }
+            
+            const latestCollection = collectionsData.collections[0];
+            
+            // Load stock analysis
+            const response = await fetch(`/stock-analysis?symbol=${symbol}&collection=${latestCollection.id}`);
+            const html = await response.text();
+            
+            // Extract the analysis content from the response
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const analysisContent = doc.querySelector('#stock-analysis-content');
+            
+            if (analysisContent) {
+                // Update the modal content
+                document.getElementById('analysis-symbol').textContent = symbol;
+                document.getElementById('stock-analysis-content').innerHTML = analysisContent.innerHTML;
+                
+                // Show the modal
+                const modal = new bootstrap.Modal(document.getElementById('stockAnalysisModal'));
+                modal.show();
+            } else {
+                throw new Error('Could not find analysis content');
+            }
+            
+        } catch (error) {
+            console.error('Error viewing stock analysis:', error);
+            this.showAlert(`Error viewing analysis for ${symbol}`, 'danger');
         }
     }
 }

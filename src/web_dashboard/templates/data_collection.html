@@ -349,6 +349,8 @@
                     </div>
                 </div>
 
+
+
                 <!-- Delete Confirmation Modal -->
                 <div class="modal fade" id="deleteModal" tabindex="-1">
                     <div class="modal-dialog">
@@ -389,6 +391,80 @@
 
                                 <!-- Hybrid Ranking Content -->
                                 <div id="hybrid-ai-ranking-content" style="display: none;">
+                                    <!-- Portfolio Management Section -->
+                                    <div class="row mb-4">
+                                        <div class="col-12">
+                                            <div class="card border-success">
+                                                <div class="card-header bg-success text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-briefcase me-2"></i>Portfolio Management</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-primary btn-lg" onclick="openUserPortfolioModal()">
+                                                                    <i class="fas fa-user me-2"></i>User Portfolio
+                                                                    <br><small class="text-white-50">Manage your personal portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-info btn-lg" onclick="openAIPortfolioModal()">
+                                                                    <i class="fas fa-robot me-2"></i>AI Portfolio
+                                                                    <br><small class="text-white-50">AI-managed portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    <!-- Portfolio Summary -->
+                                                    <div class="row mt-3">
+                                                        <div class="col-12">
+                                                            <div class="card border-info">
+                                                                <div class="card-header bg-info text-white">
+                                                                    <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Portfolio Summary</h6>
+                                                                </div>
+                                                                <div class="card-body">
+                                                                    <div class="row" id="portfolio-summary">
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">User Portfolio</h6>
+                                                                                <h4 class="text-primary" id="user-portfolio-value">$0.00</h4>
+                                                                                <small class="text-muted" id="user-portfolio-pnl">P&L: $0.00 (0.00%)</small>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">AI Portfolio</h6>
+                                                                                <h4 class="text-info" id="ai-portfolio-value">$0.00</h4>
+                                                                                <small class="text-muted" id="ai-portfolio-pnl">P&L: $0.00 (0.00%)</small>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">Total Positions</h6>
+                                                                                <h4 class="text-success" id="total-positions">0</h4>
+                                                                                <small class="text-muted">Active positions</small>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div class="col-md-3">
+                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">Today's Trades</h6>
+                                                                                <h4 class="text-warning" id="today-trades">0</h4>
+                                                                                <small class="text-muted">Trades today</small>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- Algorithm Performance Summary -->
                                     <div class="row mb-4">
                                         <div class="col-12">
@@ -839,6 +915,37 @@
                                                                 <!-- Dual scores will be populated here -->
                                                             </tbody>
                                                         </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Portfolio Management Buttons -->
+                                    <div class="row mt-4">
+                                        <div class="col-12">
+                                            <div class="card border-success">
+                                                <div class="card-header bg-success text-white">
+                                                    <h6 class="mb-0"><i class="fas fa-briefcase me-2"></i>Portfolio Management</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-primary btn-lg" onclick="openUserPortfolioModal()">
+                                                                    <i class="fas fa-user me-2"></i>User Portfolio
+                                                                    <br><small class="text-white-50">Manage your personal portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-info btn-lg" onclick="openAIPortfolioModal()">
+                                                                    <i class="fas fa-robot me-2"></i>AI Portfolio
+                                                                    <br><small class="text-white-50">AI-managed portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
