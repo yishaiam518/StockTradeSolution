@@ -8,9 +8,10 @@ import logging
 import schedule
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, time as dt_time
 from typing import Dict, List, Optional
 from .data_manager import DataCollectionManager
+import pytz
 
 
 class CollectionScheduler:
@@ -26,6 +27,15 @@ class CollectionScheduler:
         self.auto_execute_ai_trades = True
         # Default AI portfolio id (created at app bootstrap). Can be made configurable later.
         self.ai_portfolio_id = 2
+
+        # Market window controls (US/Eastern by default). Scheduler always runs,
+        # but will skip data updates outside this window when enabled.
+        self.skip_outside_window = True
+        self.market_timezone = 'US/Eastern'
+        # NYSE regular session
+        self.active_window_start = dt_time(hour=9, minute=30)
+        self.active_window_end = dt_time(hour=16, minute=0)
+        self.active_weekdays = {0, 1, 2, 3, 4}  # Mon-Fri
         
         # Get interval from database or default to 24h
         collection_details = data_manager.get_collection_details(collection_id)
@@ -150,6 +160,21 @@ class CollectionScheduler:
             self.logger.info(f"Running scheduled update for collection {self.collection_id}")
             self.last_run = datetime.now()
             
+            # If configured, skip actual data updates outside market hours
+            if self.skip_outside_window and not self._is_within_active_window():
+                self.logger.info(
+                    f"⏸️ Outside active market window ({self.active_window_start.strftime('%H:%M')} - "
+                    f"{self.active_window_end.strftime('%H:%M')} {self.market_timezone}). Skipping data update."
+                )
+                # Still update next/last run bookkeeping so UI status looks alive
+                self.last_result = {
+                    'success': True,
+                    'skipped_due_to_market_window': True,
+                    'timestamp': self.last_run.isoformat()
+                }
+                self._update_database_times()
+                return
+            
             result = self.data_manager.update_collection(self.collection_id)
             
             if result.get('success'):
@@ -221,6 +246,19 @@ class CollectionScheduler:
         except Exception as e:
             self.logger.error(f"Error executing AI portfolio automation: {e}")
             return {'success': False, 'error': str(e)}
+
+    def _is_within_active_window(self) -> bool:
+        """Return True if current time (market TZ) is within configured active window and weekday."""
+        try:
+            tz = pytz.timezone(self.market_timezone)
+            now_local = datetime.now(tz)
+            if now_local.weekday() not in self.active_weekdays:
+                return False
+            current_tod = now_local.time()
+            return self.active_window_start <= current_tod <= self.active_window_end
+        except Exception:
+            # Fail open to avoid blocking updates
+            return True
 
     def _calculate_technical_indicators(self):
         """Calculate technical indicators for all symbols in this collection."""
