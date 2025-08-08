@@ -8,8 +8,10 @@ and risk management operations.
 import logging
 from datetime import datetime, date
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import Enum
+import sqlite3
+import json
 
 from .portfolio_database import (
     PortfolioDatabase, Portfolio, Position, Transaction, 
@@ -28,11 +30,19 @@ class PortfolioSettings:
     initial_cash: float = 100000.0
     max_position_size: float = 0.10  # 10% of portfolio
     max_positions: int = 20
-    stop_loss_pct: float = 0.15  # 15%
-    take_profit_pct: float = 0.25  # 25%
     cash_reserve_pct: float = 0.10  # 10%
     risk_level: RiskLevel = RiskLevel.MODERATE
     rebalance_frequency: str = "monthly"  # daily, weekly, monthly
+    
+    # Trading cash management
+    cash_for_trading: float = 100000.0  # Total cash allocated for trading
+    available_cash_for_trading: float = 100000.0  # Current available cash for trading
+    transaction_limit_pct: float = 0.02  # 2% limit per transaction
+    safe_net: float = 1000.0  # Minimum cash to always keep available
+    
+    # Risk management
+    stop_loss_pct: float = 0.15  # 15% stop loss
+    stop_gain_pct: float = 0.25  # 25% stop gain (renamed from take_profit_pct)
 
 @dataclass
 class PortfolioSummary:
@@ -58,6 +68,104 @@ class PortfolioManager:
         
         # Initialize default portfolios if none exist
         self._initialize_default_portfolios()
+        
+        # Migrate existing portfolios to include new trading parameters
+        self._migrate_existing_portfolios()
+
+    def _load_settings_from_portfolio(self, portfolio: Portfolio) -> Optional[PortfolioSettings]:
+        """Safely load settings from a portfolio, tolerating unknown/legacy keys.
+
+        - Maps legacy keys (e.g., take_profit_pct -> stop_gain_pct)
+        - Converts string risk_level to RiskLevel enum
+        - Filters out any unknown keys before constructing dataclass
+        """
+        try:
+            raw_settings = dict(portfolio.settings or {})
+
+            # Map legacy key if present
+            if 'stop_gain_pct' not in raw_settings and 'take_profit_pct' in raw_settings:
+                raw_settings['stop_gain_pct'] = raw_settings['take_profit_pct']
+
+            # Convert risk_level string to enum if needed
+            if 'risk_level' in raw_settings and isinstance(raw_settings['risk_level'], str):
+                try:
+                    raw_settings['risk_level'] = RiskLevel(raw_settings['risk_level'])
+                except Exception:
+                    # Fallback to default by removing invalid value
+                    raw_settings.pop('risk_level', None)
+
+            # Keep only allowed keys
+            allowed_fields = {f.name for f in fields(PortfolioSettings)}
+            filtered = {k: v for k, v in raw_settings.items() if k in allowed_fields}
+
+            settings = PortfolioSettings(**filtered)
+            return settings
+        except Exception as e:
+            self.logger.error(f"Error loading portfolio settings: {e}")
+            return None
+    
+    def _migrate_existing_portfolios(self):
+        """Migrate existing portfolios to include new trading parameters."""
+        try:
+            portfolios = self.db.get_all_portfolios()
+            
+            for portfolio in portfolios:
+                settings = (portfolio.settings or {}).copy()
+                needs_update = False
+                
+                # Add missing trading parameters
+                if 'cash_for_trading' not in settings:
+                    settings['cash_for_trading'] = portfolio.initial_cash
+                    needs_update = True
+                
+                if 'available_cash_for_trading' not in settings:
+                    settings['available_cash_for_trading'] = portfolio.current_cash
+                    needs_update = True
+                
+                if 'transaction_limit_pct' not in settings:
+                    settings['transaction_limit_pct'] = 0.02  # 2% default
+                    needs_update = True
+                
+                if 'safe_net' not in settings:
+                    settings['safe_net'] = 1000.0  # $1000 default
+                    needs_update = True
+                
+                if 'stop_gain_pct' not in settings and 'take_profit_pct' in settings:
+                    settings['stop_gain_pct'] = settings['take_profit_pct']
+                    needs_update = True
+
+                # Remove legacy/unknown keys and normalize risk_level for storage
+                allowed = {f.name for f in fields(PortfolioSettings)}
+                # Keep 'risk_level' as string in DB
+                if 'risk_level' in settings and isinstance(settings['risk_level'], RiskLevel):
+                    settings['risk_level'] = settings['risk_level'].value
+
+                # Remove legacy key explicitly
+                if 'take_profit_pct' in settings:
+                    settings.pop('take_profit_pct', None)
+                    needs_update = True
+
+                # Drop any unknown keys
+                filtered = {k: v for k, v in settings.items() if (k in allowed or k == 'risk_level')}
+                if filtered.keys() != settings.keys():
+                    needs_update = True
+                settings = filtered
+                
+                if needs_update:
+                    # Update portfolio in database
+                    with sqlite3.connect(self.db.db_path) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            UPDATE portfolios 
+                            SET settings = ?, updated_at = CURRENT_TIMESTAMP
+                            WHERE id = ?
+                        """, (json.dumps(settings), portfolio.id))
+                        conn.commit()
+                    
+                    self.logger.info(f"Migrated portfolio {portfolio.id} with new trading parameters")
+                    
+        except Exception as e:
+            self.logger.error(f"Error migrating portfolios: {e}")
     
     def _initialize_default_portfolios(self):
         """Initialize default portfolios if none exist."""
@@ -70,9 +178,17 @@ class PortfolioManager:
                     initial_cash=100000.0,
                     max_position_size=0.10,
                     max_positions=20,
+                    cash_reserve_pct=0.10,
+                    risk_level=RiskLevel.MODERATE,
+                    rebalance_frequency="monthly",
+                    # Trading cash management
+                    cash_for_trading=100000.0,
+                    available_cash_for_trading=100000.0,
+                    transaction_limit_pct=0.02,  # 2% limit per transaction
+                    safe_net=1000.0,  # Minimum cash to always keep available
+                    # Risk management
                     stop_loss_pct=0.15,
-                    take_profit_pct=0.25,
-                    risk_level=RiskLevel.MODERATE
+                    stop_gain_pct=0.25
                 )
                 
                 # Convert enum to string for JSON serialization
@@ -91,9 +207,17 @@ class PortfolioManager:
                     initial_cash=100000.0,
                     max_position_size=0.08,  # Slightly more conservative
                     max_positions=15,
+                    cash_reserve_pct=0.10,
+                    risk_level=RiskLevel.CONSERVATIVE,
+                    rebalance_frequency="monthly",
+                    # Trading cash management
+                    cash_for_trading=100000.0,
+                    available_cash_for_trading=100000.0,
+                    transaction_limit_pct=0.015,  # 1.5% limit per transaction (more conservative)
+                    safe_net=2000.0,  # Higher safe net for AI
+                    # Risk management
                     stop_loss_pct=0.12,
-                    take_profit_pct=0.20,
-                    risk_level=RiskLevel.CONSERVATIVE
+                    stop_gain_pct=0.20
                 )
                 
                 # Convert enum to string for JSON serialization
@@ -192,40 +316,72 @@ class PortfolioManager:
                   price: float = None, notes: str = None) -> bool:
         """Buy stock for a portfolio."""
         try:
+            self.logger.info(f"Starting buy_stock for portfolio {portfolio_id}, symbol {symbol}, shares {shares}, price {price}")
+            
             portfolio = self.db.get_portfolio(portfolio_id)
             if not portfolio:
                 self.logger.error(f"Portfolio {portfolio_id} not found")
                 return False
+        
+            self.logger.info(f"Found portfolio: {portfolio.name}, current cash: ${portfolio.current_cash}")
+            
+            # Load portfolio settings
+            settings = self._load_settings_from_portfolio(portfolio)
+            if not settings:
+                return False
+            self.logger.info(f"Portfolio settings loaded: available_cash_for_trading=${settings.available_cash_for_trading:.2f}, transaction_limit_pct={settings.transaction_limit_pct}")
             
             # If no price provided, fetch the last traded price
             if price is None:
+                self.logger.info(f"No price provided, fetching last traded price for {symbol}")
                 price = self._get_last_traded_price(symbol)
                 if price is None:
                     self.logger.error(f"Could not fetch price for {symbol}")
                     return False
                 self.logger.info(f"Using fetched price for {symbol}: ${price:.2f}")
+            else:
+                self.logger.info(f"Using provided price for {symbol}: ${price:.2f}")
             
-            # Check if we have enough cash
+            # Calculate total cost
             total_cost = shares * price
-            if total_cost > portfolio.current_cash:
-                self.logger.error(f"Insufficient cash for {symbol} purchase")
+            self.logger.info(f"Total cost: ${total_cost:.2f}, available cash for trading: ${settings.available_cash_for_trading:.2f}")
+            
+            # Check if we have enough available cash for trading
+            if total_cost > settings.available_cash_for_trading:
+                self.logger.error(f"Insufficient available cash for trading. Need ${total_cost:.2f}, have ${settings.available_cash_for_trading:.2f}")
+                return False
+    
+            # Check transaction limit (percentage of cash for trading)
+            transaction_limit = settings.cash_for_trading * settings.transaction_limit_pct
+            if total_cost > transaction_limit:
+                self.logger.error(f"Transaction exceeds limit. Cost: ${total_cost:.2f}, Limit: ${transaction_limit:.2f} ({settings.transaction_limit_pct*100}% of ${settings.cash_for_trading:.2f})")
+                return False
+            
+            # Check safe net (minimum cash to always keep available)
+            remaining_cash = settings.available_cash_for_trading - total_cost
+            if remaining_cash < settings.safe_net:
+                self.logger.error(f"Transaction would violate safe net. Remaining cash: ${remaining_cash:.2f}, Safe net: ${settings.safe_net:.2f}")
                 return False
             
             # Check position size limits
-            settings = PortfolioSettings(**portfolio.settings)
             portfolio_summary = self.get_portfolio_summary(portfolio_id)
             
             if portfolio_summary:
                 position_value = shares * price
+                self.logger.info(f"Position value: ${position_value:.2f}, total portfolio value: ${portfolio_summary.total_value:.2f}")
+                
                 if position_value > portfolio_summary.total_value * settings.max_position_size:
-                    self.logger.error(f"Position size exceeds limit for {symbol}")
+                    self.logger.error(f"Position size exceeds limit for {symbol}. Position: ${position_value:.2f}, Limit: ${portfolio_summary.total_value * settings.max_position_size:.2f}")
                     return False
                 
                 if portfolio_summary.positions_count >= settings.max_positions:
-                    self.logger.error(f"Maximum positions reached for portfolio")
+                    self.logger.error(f"Maximum positions reached for portfolio. Current: {portfolio_summary.positions_count}, Max: {settings.max_positions}")
                     return False
+            else:
+                self.logger.warning("Could not get portfolio summary, skipping position size checks")
             
             # Execute transaction
+            self.logger.info(f"Executing transaction for {shares} shares of {symbol} at ${price:.2f}")
             transaction_id = self.db.add_transaction(
                 portfolio_id=portfolio_id,
                 symbol=symbol,
@@ -238,17 +394,47 @@ class PortfolioManager:
             # Update position
             self.db.update_position(portfolio_id, symbol, shares, price)
             
-            self.logger.info(f"Bought {shares} shares of {symbol} at ${price:.2f}")
+            # Update available cash for trading
+            settings.available_cash_for_trading -= total_cost
+            portfolio.settings = settings.__dict__.copy()
+            portfolio.settings['risk_level'] = settings.risk_level.value
+            
+            # Update portfolio in database
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE portfolios 
+                    SET current_cash = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (portfolio.current_cash - total_cost, json.dumps(portfolio.settings), portfolio_id))
+                conn.commit()
+            
+            self.logger.info(f"Successfully bought {shares} shares of {symbol} at ${price:.2f}. Available cash for trading: ${settings.available_cash_for_trading:.2f}")
             return True
             
         except Exception as e:
             self.logger.error(f"Error buying stock: {e}")
+            import traceback
+            self.logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
     def sell_stock(self, portfolio_id: int, symbol: str, shares: float, 
                    price: float = None, notes: str = None) -> bool:
         """Sell stock from a portfolio."""
         try:
+            self.logger.info(f"Starting sell_stock for portfolio {portfolio_id}, symbol {symbol}, shares {shares}, price {price}")
+            
+            portfolio = self.db.get_portfolio(portfolio_id)
+            if not portfolio:
+                self.logger.error(f"Portfolio {portfolio_id} not found")
+                return False
+            
+            # Load portfolio settings
+            settings = self._load_settings_from_portfolio(portfolio)
+            if not settings:
+                return False
+            self.logger.info(f"Portfolio settings loaded: available_cash_for_trading=${settings.available_cash_for_trading:.2f}")
+            
             # Check if we have enough shares
             positions = self.db.get_portfolio_positions(portfolio_id)
             position = next((p for p in positions if p.symbol == symbol), None)
@@ -265,6 +451,10 @@ class PortfolioManager:
                     return False
                 self.logger.info(f"Using fetched price for {symbol}: ${price:.2f}")
             
+            # Calculate total proceeds
+            total_proceeds = shares * price
+            self.logger.info(f"Total proceeds: ${total_proceeds:.2f}")
+            
             # Execute transaction
             transaction_id = self.db.add_transaction(
                 portfolio_id=portfolio_id,
@@ -278,7 +468,22 @@ class PortfolioManager:
             # Update position (negative shares for sell)
             self.db.update_position(portfolio_id, symbol, -shares, price)
             
-            self.logger.info(f"Sold {shares} shares of {symbol} at ${price:.2f}")
+            # Update available cash for trading
+            settings.available_cash_for_trading += total_proceeds
+            portfolio.settings = settings.__dict__.copy()
+            portfolio.settings['risk_level'] = settings.risk_level.value
+            
+            # Update portfolio in database
+            with sqlite3.connect(self.db.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    UPDATE portfolios 
+                    SET current_cash = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                """, (portfolio.current_cash + total_proceeds, json.dumps(portfolio.settings), portfolio_id))
+                conn.commit()
+            
+            self.logger.info(f"Sold {shares} shares of {symbol} at ${price:.2f}. Available cash for trading: ${settings.available_cash_for_trading:.2f}")
             return True
             
         except Exception as e:
@@ -355,7 +560,9 @@ class PortfolioManager:
             if not portfolio or portfolio.portfolio_type != PortfolioType.AI_MANAGED:
                 return {"success": False, "error": "Invalid AI portfolio"}
             
-            settings = PortfolioSettings(**portfolio.settings)
+            settings = self._load_settings_from_portfolio(portfolio)
+            if not settings:
+                return {"success": False, "error": "Invalid portfolio settings"}
             portfolio_summary = self.get_portfolio_summary(portfolio_id)
             
             decisions = []
@@ -483,7 +690,7 @@ class PortfolioManager:
                 })
             
             # Check take profit
-            elif current_position.pnl_pct >= settings.take_profit_pct * 100:
+            elif current_position.pnl_pct >= settings.stop_gain_pct * 100:
                 decision.update({
                     'action': 'sell',
                     'shares': current_position.shares,

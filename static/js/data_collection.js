@@ -179,13 +179,13 @@ function openAIRanking(collectionId) {
 // Portfolio functions
 function buyStock(symbol) {
     if (window.dataCollectionManager) {
-        window.dataCollectionManager.openBuyStockModal(symbol);
+        window.dataCollectionManager.openTradeModal(symbol);
     }
 }
 
 function sellStock(symbol) {
     if (window.dataCollectionManager) {
-        window.dataCollectionManager.openSellStockModal(symbol);
+        window.dataCollectionManager.openTradeModal(symbol);
     }
 }
 
@@ -206,6 +206,342 @@ class DataCollectionManager {
         this.initializeEventListeners();
         this.loadExchanges();
         this.loadCollections();
+        // Cache trade modal elements if they exist
+        this.quickTradeModalEl = null;
+        this.quickTradeModal = null;
+        this.quickTradeSymbolEl = null;
+        this.quickTradeSharesEl = null;
+        this.quickTradeNotesEl = null;
+    }
+
+    // Ensure a minimal quick trade modal exists in DOM
+    ensureQuickTradeModal() {
+        if (document.getElementById('quick-trade-modal')) {
+            return;
+        }
+        const modalHtml = `
+            <div class="modal fade" id="quick-trade-modal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Trade <span id="quick-trade-symbol">Symbol</span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="alert alert-info" id="portfolio-balance">
+                      <i class="fas fa-wallet"></i> Loading portfolio balance...
+                    </div>
+                    <div class="row g-3 mb-2">
+                      <div class="col-12">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                          <div><span class="badge bg-secondary">Symbol:</span> <strong id="owned-symbol">-</strong></div>
+                          <div><span class="badge bg-secondary">Owned:</span> <strong id="owned-shares">0</strong> shares @ avg <strong id="owned-avg">-</strong></div>
+                          <div><span class="badge bg-secondary">Available to sell:</span> <strong id="owned-available">0</strong></div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Shares</label>
+                      <input id="trade-shares" type="number" min="1" value="100" class="form-control" />
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Price (from latest data collection)</label>
+                      <input id="trade-price" type="number" step="0.01" class="form-control" placeholder="Loading latest price..." readonly />
+                      <small class="form-text text-muted">Price is automatically fetched from the latest data collection</small>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label">Notes</label>
+                      <input id="trade-notes" type="text" class="form-control" />
+                    </div>
+                    <div class="d-flex gap-2">
+                      <button id="quick-buy-btn" class="btn btn-success w-50" disabled>
+                        <i class="fas fa-shopping-cart"></i> Buy Stock
+                      </button>
+                      <button id="quick-sell-btn" class="btn btn-warning w-50">
+                        <i class="fas fa-sell"></i> Sell Stock
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    async openTradeModal(symbol) {
+        this.ensureQuickTradeModal();
+        const modalEl = document.getElementById('quick-trade-modal');
+        const modal = new bootstrap.Modal(modalEl);
+        document.getElementById('quick-trade-symbol').textContent = symbol;
+        const ownedSymbolSpan = document.getElementById('owned-symbol');
+        const ownedSharesSpan = document.getElementById('owned-shares');
+        const ownedAvgSpan = document.getElementById('owned-avg');
+        const ownedAvailSpan = document.getElementById('owned-available');
+        if (ownedSymbolSpan) ownedSymbolSpan.textContent = symbol;
+        const sharesInput = document.getElementById('trade-shares');
+        const priceInput = document.getElementById('trade-price');
+        const notesInput = document.getElementById('trade-notes');
+        const buyBtn = document.getElementById('quick-buy-btn');
+        const sellBtn = document.getElementById('quick-sell-btn');
+        
+        // Clear any existing warning messages
+        const existingWarnings = priceInput.parentNode.querySelectorAll('.alert-warning');
+        existingWarnings.forEach(warning => warning.remove());
+        
+        // Reset button states
+        buyBtn.disabled = true;
+        buyBtn.classList.add('btn-secondary');
+        buyBtn.classList.remove('btn-success');
+        buyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Buy Stock';
+        buyBtn.title = 'Loading...';
+        
+        sellBtn.disabled = false;
+        sellBtn.classList.remove('btn-secondary');
+        sellBtn.classList.add('btn-warning');
+        sellBtn.innerHTML = '<i class="fas fa-sell"></i> Sell Stock';
+        sellBtn.title = '';
+        
+        // Set default values
+        if (sharesInput) sharesInput.value = 100;
+        if (notesInput) notesInput.value = `Trade ${symbol}`;
+        
+        // Function to update button state based on current values
+        const updateButtonState = () => {
+            const currentShares = parseInt(sharesInput.value) || 0;
+            const currentPrice = parseFloat(priceInput.value) || 0;
+            const totalCost = currentShares * currentPrice;
+            
+            // Get portfolio data for constraints
+            const portfolioResponse = fetch('/api/portfolios/1').then(response => response.json());
+            portfolioResponse.then(portfolioData => {
+                if (portfolioData.success) {
+                    const portfolio = portfolioData.portfolio;
+                    const settings = portfolio.settings || {};
+                    const availableCash = settings.available_cash_for_trading || portfolio.current_cash || 0;
+                    const cashForTrading = settings.cash_for_trading || portfolio.initial_cash || 0;
+                    const transactionLimitPct = settings.transaction_limit_pct || 0.02;
+                    const safeNet = settings.safe_net || 1000;
+                    
+                    // Clear any existing warning messages
+                    const existingWarnings = priceInput.parentNode.querySelectorAll('.alert-warning');
+                    existingWarnings.forEach(warning => warning.remove());
+                    
+                    // Check various constraints
+                    let canBuy = true;
+                    let reason = '';
+                    
+                    if (totalCost > availableCash) {
+                        canBuy = false;
+                        reason = `Insufficient cash. Need $${totalCost.toFixed(2)}, have $${availableCash.toFixed(2)}`;
+                    } else if (totalCost > cashForTrading * transactionLimitPct) {
+                        canBuy = false;
+                        reason = `Transaction exceeds ${(transactionLimitPct * 100).toFixed(1)}% limit. Cost: $${totalCost.toFixed(2)}, Limit: $${(cashForTrading * transactionLimitPct).toFixed(2)}`;
+                    } else if (availableCash - totalCost < safeNet) {
+                        canBuy = false;
+                        reason = `Transaction would violate safe net. Remaining: $${(availableCash - totalCost).toFixed(2)}, Safe net: $${safeNet.toFixed(2)}`;
+                    }
+                    
+                    if (!canBuy) {
+                        // Disable BUY button if any constraint is violated
+                        buyBtn.disabled = true;
+                        buyBtn.classList.add('btn-secondary');
+                        buyBtn.classList.remove('btn-success');
+                        buyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Buy Stock (Cannot Buy)';
+                        buyBtn.title = reason;
+                        
+                        // Add a warning message
+                        const warningElement = document.createElement('div');
+                        warningElement.className = 'alert alert-warning mt-2';
+                        warningElement.innerHTML = `<small><i class="fas fa-exclamation-triangle"></i> ${reason}. You can sell positions to increase your available cash.</small>`;
+                        priceInput.parentNode.appendChild(warningElement);
+                    } else {
+                        // Enable BUY button
+                        buyBtn.disabled = false;
+                        buyBtn.classList.remove('btn-secondary');
+                        buyBtn.classList.add('btn-success');
+                        buyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Buy Stock';
+                        buyBtn.title = '';
+                    }
+                }
+            }).catch(error => {
+                console.log('Error updating button state:', error);
+            });
+        };
+        
+        // Add event listener for shares input changes
+        sharesInput.addEventListener('input', updateButtonState);
+        
+        // Always fetch latest price from data collection
+        try {
+            // First, get the latest collection
+            const collectionsResponse = await fetch('/api/data-collection/collections');
+            const collectionsData = await collectionsResponse.json();
+            
+            if (collectionsData.success && collectionsData.collections.length > 0) {
+                // Get the most recent collection
+                const latestCollection = collectionsData.collections[0];
+                const collectionId = latestCollection.collection_id;
+                
+                // Fetch latest price from data collection
+                const response = await fetch(`/api/data-collection/collections/${collectionId}/symbols/${symbol}/data-with-indicators`);
+                const data = await response.json();
+                if (data.success && data.data && data.data.length > 0) {
+                    const latestData = data.data[data.data.length - 1];
+                    if (latestData.Close) {
+                        const latestPrice = latestData.Close.toFixed(2);
+                        priceInput.value = latestPrice;
+                        priceInput.readOnly = true; // Make price read-only since it comes from data collection
+                        priceInput.style.backgroundColor = '#f8f9fa'; // Light gray background to indicate read-only
+                    } else {
+                        this.showAlert(`Could not fetch latest price for ${symbol}`, 'warning');
+                        priceInput.placeholder = 'Price not available';
+                    }
+                } else {
+                    this.showAlert(`No data available for ${symbol}`, 'warning');
+                    priceInput.placeholder = 'No data available';
+                }
+            } else {
+                this.showAlert('No collections available', 'warning');
+                priceInput.placeholder = 'No collections available';
+            }
+            
+            // Fetch portfolio balance, ownership for this symbol, and check if we can buy/sell
+            const portfolioResponse = await fetch('/api/portfolios/1');
+            const portfolioData = await portfolioResponse.json();
+            if (portfolioData.success) {
+                const portfolio = portfolioData.portfolio;
+                const settings = portfolio.settings || {};
+                // ownership info
+                const positions = (portfolioData.positions || []);
+                const pos = positions.find(p => p.symbol === symbol);
+                const ownedShares = pos ? Number(pos.shares) : 0;
+                const ownedAvg = pos ? Number(pos.avg_price) : null;
+                if (ownedSharesSpan) ownedSharesSpan.textContent = ownedShares.toFixed(2);
+                if (ownedAvgSpan) ownedAvgSpan.textContent = ownedAvg != null ? `$${ownedAvg.toFixed(2)}` : '-';
+                if (ownedAvailSpan) ownedAvailSpan.textContent = ownedShares.toFixed(2);
+                
+                // Use available_cash_for_trading instead of current_cash
+                const availableCash = settings.available_cash_for_trading || portfolio.current_cash || 0;
+                const cashForTrading = settings.cash_for_trading || portfolio.initial_cash || 0;
+                const transactionLimitPct = settings.transaction_limit_pct || 0.02; // Default 2%
+                const safeNet = settings.safe_net || 1000; // Default $1000
+                
+                const balanceElement = document.getElementById('portfolio-balance');
+                if (balanceElement) {
+                    balanceElement.innerHTML = `
+                        <i class="fas fa-wallet"></i> Available Cash for Trading: $${availableCash.toFixed(2)}
+                        <br><small class="text-muted">
+                            Transaction Limit: ${(transactionLimitPct * 100).toFixed(1)}% of $${cashForTrading.toFixed(2)} ($${(cashForTrading * transactionLimitPct).toFixed(2)}) | 
+                            Safe Net: $${safeNet.toFixed(2)}
+                        </small>
+                    `;
+                    balanceElement.className = 'alert alert-info';
+                }
+                
+                // Check if we have enough cash for the trade
+                const price = priceInput.value ? parseFloat(priceInput.value) : 0;
+                const shares = sharesInput.value ? parseInt(sharesInput.value) : 0;
+                const totalCost = price * shares;
+                
+                // Check various constraints
+                let canBuy = true;
+                let reason = '';
+                
+                if (totalCost > availableCash) {
+                    canBuy = false;
+                    reason = `Insufficient cash. Need $${totalCost.toFixed(2)}, have $${availableCash.toFixed(2)}`;
+                } else if (totalCost > cashForTrading * transactionLimitPct) {
+                    canBuy = false;
+                    reason = `Transaction exceeds ${(transactionLimitPct * 100).toFixed(1)}% limit. Cost: $${totalCost.toFixed(2)}, Limit: $${(cashForTrading * transactionLimitPct).toFixed(2)}`;
+                } else if (availableCash - totalCost < safeNet) {
+                    canBuy = false;
+                    reason = `Transaction would violate safe net. Remaining: $${(availableCash - totalCost).toFixed(2)}, Safe net: $${safeNet.toFixed(2)}`;
+                }
+                
+                if (!canBuy) {
+                    // Disable BUY button if any constraint is violated
+                    buyBtn.disabled = true;
+                    buyBtn.classList.add('btn-secondary');
+                    buyBtn.classList.remove('btn-success');
+                    buyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Buy Stock (Cannot Buy)';
+                    buyBtn.title = reason;
+                    
+                    // Add a warning message
+                    const warningElement = document.createElement('div');
+                    warningElement.className = 'alert alert-warning mt-2';
+                    warningElement.innerHTML = `<small><i class="fas fa-exclamation-triangle"></i> ${reason}. You can sell positions to increase your available cash.</small>`;
+                    priceInput.parentNode.appendChild(warningElement);
+                } else {
+                    // Enable BUY button
+                    buyBtn.disabled = false;
+                    buyBtn.classList.remove('btn-secondary');
+                    buyBtn.classList.add('btn-success');
+                    buyBtn.innerHTML = '<i class="fas fa-shopping-cart"></i> Buy Stock';
+                    buyBtn.title = '';
+                }
+                
+                // Disable sell button if user has no shares
+                if (!pos || ownedShares <= 0) {
+                    sellBtn.disabled = true;
+                    sellBtn.title = `No owned shares of ${symbol} to sell`;
+                } else {
+                    sellBtn.disabled = false;
+                    sellBtn.title = '';
+                }
+
+                // Update button state based on current values
+                updateButtonState();
+            }
+        } catch (error) {
+            console.log('Could not fetch latest price or portfolio balance:', error);
+            this.showAlert(`Could not fetch latest data for ${symbol}`, 'warning');
+            priceInput.placeholder = 'Error fetching price';
+        }
+        
+        buyBtn.onclick = async () => {
+            if (buyBtn.disabled) {
+                this.showAlert('Cannot buy - insufficient cash. Please sell some positions first.', 'warning');
+                return;
+            }
+            
+            const shares = parseInt(sharesInput.value);
+            const price = priceInput.value ? parseFloat(priceInput.value) : null;
+            
+            // Validation
+            if (!shares || shares <= 0) {
+                this.showAlert('Please enter a valid number of shares', 'danger');
+                return;
+            }
+            
+            if (!price || price <= 0) {
+                this.showAlert('Please wait for price to load or try again', 'danger');
+                return;
+            }
+            
+            await this.executeTrade('buy', symbol, shares, price, notesInput.value);
+            modal.hide();
+        };
+        
+        sellBtn.onclick = async () => {
+            const shares = parseInt(sharesInput.value);
+            const price = priceInput.value ? parseFloat(priceInput.value) : null;
+            
+            // Validation
+            if (!shares || shares <= 0) {
+                this.showAlert('Please enter a valid number of shares', 'danger');
+                return;
+            }
+            
+            if (!price || price <= 0) {
+                this.showAlert('Please wait for price to load or try again', 'danger');
+                return;
+            }
+            
+            await this.executeTrade('sell', symbol, shares, price, notesInput.value);
+            modal.hide();
+        };
+        
+        modal.show();
     }
 
     initializeEventListeners() {
@@ -2573,11 +2909,8 @@ class DataCollectionManager {
                                             <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${data.symbol}')" title="View Analysis">
                                                 <i class="fas fa-chart-line"></i>
                                             </button>
-                                            <button class="btn btn-outline-success" onclick="buyStock('${data.symbol}')" title="Buy Stock">
-                                                <i class="fas fa-plus"></i>
-                                            </button>
-                                            <button class="btn btn-outline-warning" onclick="sellStock('${data.symbol}')" title="Sell Stock">
-                                                <i class="fas fa-minus"></i>
+                                            <button class="btn btn-outline-info" onclick="buyStock('${data.symbol}')" title="Trade Stock">
+                                                <i class="fas fa-exchange-alt"></i>
                                             </button>
                                         </div>`
                 }
@@ -2695,11 +3028,8 @@ class DataCollectionManager {
                                         <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')" title="View Analysis">
                                             <i class="fas fa-chart-line"></i>
                                         </button>
-                                        <button class="btn btn-outline-success" onclick="buyStock('${stock.symbol}')" title="Buy Stock">
-                                            <i class="fas fa-plus"></i>
-                                        </button>
-                                        <button class="btn btn-outline-warning" onclick="sellStock('${stock.symbol}')" title="Sell Stock">
-                                            <i class="fas fa-minus"></i>
+                                        <button class="btn btn-outline-info" onclick="buyStock('${stock.symbol}')" title="Trade Stock">
+                                            <i class="fas fa-exchange-alt"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -2824,11 +3154,8 @@ class DataCollectionManager {
                                         <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')" title="View Analysis">
                                             <i class="fas fa-chart-line"></i>
                                         </button>
-                                        <button class="btn btn-outline-success" onclick="buyStock('${stock.symbol}')" title="Buy Stock">
-                                            <i class="fas fa-plus"></i>
-                                        </button>
-                                        <button class="btn btn-outline-warning" onclick="sellStock('${stock.symbol}')" title="Sell Stock">
-                                            <i class="fas fa-minus"></i>
+                                        <button class="btn btn-outline-info" onclick="buyStock('${stock.symbol}')" title="Trade Stock">
+                                            <i class="fas fa-exchange-alt"></i>
                                         </button>
                                     </div>
                                 </td>
@@ -3167,17 +3494,38 @@ class DataCollectionManager {
             });
 
             const result = await response.json();
+            console.log('Trade result:', result);
+            
             if (result.success) {
                 this.showAlert(`Successfully ${action}ed ${shares} shares of ${symbol}`, 'success');
                 // Hide the trade form
                 const tradeForm = document.getElementById('quick-trade-form');
                 if (tradeForm) tradeForm.style.display = 'none';
+                
+                // Refresh portfolio summary
+                await this.loadPortfolioSummary();
             } else {
-                this.showAlert(`Failed to ${action} ${symbol}: ${result.error}`, 'danger');
+                let errorMessage = result.error || `Failed to ${action} ${symbol}`;
+                console.log('Trade error:', errorMessage);
+                
+                // Provide more specific error messages
+                if (errorMessage.includes('Insufficient cash')) {
+                    errorMessage = `Insufficient cash for this trade. Please reduce the number of shares or check your portfolio balance.`;
+                } else if (errorMessage.includes('Position size exceeds limit')) {
+                    errorMessage = `Position size exceeds the maximum allowed (10% of portfolio value). Please reduce the number of shares.`;
+                } else if (errorMessage.includes('Maximum positions reached')) {
+                    errorMessage = `Maximum number of positions (20) reached. Please sell some positions before buying new ones.`;
+                } else if (errorMessage.includes('Could not fetch price')) {
+                    errorMessage = `Could not fetch the latest price for ${symbol}. Please enter a price manually.`;
+                } else if (errorMessage.includes('Failed to buy stock')) {
+                    errorMessage = `Failed to buy stock - check position limits or other constraints. Please try with fewer shares.`;
+                }
+                
+                this.showAlert(errorMessage, 'danger');
             }
         } catch (error) {
             console.error('Error executing trade:', error);
-            this.showAlert(`Error ${action}ing ${symbol}`, 'danger');
+            this.showAlert(`Error ${action}ing ${symbol}: ${error.message}`, 'danger');
         }
     }
 
@@ -3218,10 +3566,21 @@ class DataCollectionManager {
     }
 
     showPortfolioModal(portfolio, title) {
-        // Create a simple portfolio modal
+        // Create a portfolio modal with editable trading parameters
+        const s = portfolio.settings || {};
+        const portfolioId = portfolio.id;
+        const cashForTrading = Number(s.cash_for_trading ?? portfolio.initial_cash ?? 0);
+        const availableCashForTrading = Number(s.available_cash_for_trading ?? portfolio.current_cash ?? 0);
+        const transactionLimitPct = Number(s.transaction_limit_pct ?? 0.02);
+        const transactionLimitAbs = cashForTrading * transactionLimitPct;
+        const stopLossPct = Number(s.stop_loss_pct ?? 0.15);
+        const stopGainPct = Number(s.stop_gain_pct ?? s.take_profit_pct ?? 0.25);
+        const safeNet = Number(s.safe_net ?? 0);
+        const currentCash = Number((portfolio.summary?.cash ?? portfolio.current_cash ?? 0));
+
         const modalHtml = `
             <div class="modal fade" id="portfolioModal" tabindex="-1">
-                <div class="modal-dialog modal-lg">
+                <div class="modal-dialog modal-xl modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header">
                             <h5 class="modal-title">${title}</h5>
@@ -3231,19 +3590,86 @@ class DataCollectionManager {
                             <div class="row">
                                 <div class="col-md-6">
                                     <h6>Portfolio Summary</h6>
-                                    <p><strong>Total Value:</strong> $${portfolio.summary?.total_value?.toFixed(2) || '0.00'}</p>
-                                    <p><strong>Cash:</strong> $${portfolio.summary?.cash?.toFixed(2) || '0.00'}</p>
-                                    <p><strong>Positions:</strong> ${portfolio.summary?.positions_count || 0}</p>
+                                    <div class="mb-2">
+                                        <label class="form-label">Available Cash</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input id="setting-current-cash" type="number" min="0" step="0.01" class="form-control" value="${currentCash.toFixed(2)}" />
+                                        </div>
+                                    </div>
+                                    <p class="mb-1"><strong>Positions:</strong> ${portfolio.summary?.positions_count || 0}</p>
+                                    <p class="mb-1"><strong>Total Value:</strong> $${portfolio.summary?.total_value?.toFixed(2) || '0.00'}</p>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>Performance</h6>
-                                    <p><strong>Total P&L:</strong> $${portfolio.summary?.total_pnl?.toFixed(2) || '0.00'}</p>
-                                    <p><strong>P&L %:</strong> ${portfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%</p>
+                                    <p class="mb-1"><strong>Total P&L:</strong> $${portfolio.summary?.total_pnl?.toFixed(2) || '0.00'}</p>
+                                    <p class="mb-1"><strong>P&L %:</strong> ${portfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%</p>
+                                </div>
+                            </div>
+                            <hr/>
+                            <div class="row mt-2">
+                                <div class="col-md-12">
+                                    <h6>Trading Parameters</h6>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Available Cash for Trading</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input id="setting-available-cash-trading" type="number" min="0" step="0.01" class="form-control" value="${availableCashForTrading.toFixed(2)}" />
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label">Cash for Trading (Total)</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input id="setting-cash-for-trading" type="number" min="0" step="0.01" class="form-control" value="${cashForTrading.toFixed(2)}" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-2">
+                                        <label class="form-label">Transaction Limit (%)</label>
+                                        <div class="input-group">
+                                            <input id="setting-transaction-limit-pct" type="number" min="0" step="0.01" class="form-control" value="${(transactionLimitPct*100).toFixed(2)}" />
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                        <small class="text-muted">Current limit: ${(transactionLimitPct * 100).toFixed(2)}% ($${transactionLimitAbs.toFixed(2)})</small>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label">Stop Loss (%)</label>
+                                        <div class="input-group">
+                                            <input id="setting-stop-loss-pct" type="number" min="0" step="0.01" class="form-control" value="${(stopLossPct*100).toFixed(2)}" />
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label">Stop Gain (%)</label>
+                                        <div class="input-group">
+                                            <input id="setting-stop-gain-pct" type="number" min="0" step="0.01" class="form-control" value="${(stopGainPct*100).toFixed(2)}" />
+                                            <span class="input-group-text">%</span>
+                                        </div>
+                                    </div>
+                                    <div class="mb-2">
+                                        <label class="form-label">Safe Net (Min Cash)</label>
+                                        <div class="input-group">
+                                            <span class="input-group-text">$</span>
+                                            <input id="setting-safe-net" type="number" min="0" step="0.01" class="form-control" value="${safeNet.toFixed(2)}" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr/>
+                            <div class="row mt-2">
+                                <div class="col-12">
+                                    <h6 class="mb-2">Transactions</h6>
+                                    <div id="portfolio-transactions-grid" class="w-100" style="max-height:360px;height:360px;overflow:auto"></div>
                                 </div>
                             </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            <button type="button" class="btn btn-primary" id="save-portfolio-settings-btn">Save</button>
                         </div>
                     </div>
                 </div>
@@ -3259,9 +3685,151 @@ class DataCollectionManager {
         // Add modal to body
         document.body.insertAdjacentHTML('beforeend', modalHtml);
         
+        // Wire up save
+        const modalEl = document.getElementById('portfolioModal');
+        modalEl.querySelector('#save-portfolio-settings-btn').onclick = () => this.savePortfolioSettings(portfolioId, title);
+        modalEl.addEventListener('shown.bs.modal', () => {
+            this.buildPortfolioTransactionsGrid(portfolioId, modalEl).catch(err => console.error('Error building transactions grid:', err));
+        }, { once: true });
+        
         // Show modal
-        const modal = new bootstrap.Modal(document.getElementById('portfolioModal'));
+        const modal = new bootstrap.Modal(modalEl);
         modal.show();
+    }
+
+    async buildPortfolioTransactionsGrid(portfolioId, modalEl) {
+        const gridHost = modalEl.querySelector('#portfolio-transactions-grid');
+        if (!gridHost) return;
+
+        try {
+            const [txResp, portResp] = await Promise.all([
+                fetch(`/api/portfolios/${portfolioId}/transactions?limit=500`),
+                fetch(`/api/portfolios/${portfolioId}`)
+            ]);
+            const [txData, portData] = await Promise.all([txResp.json(), portResp.json()]);
+            const transactions = (txData && txData.success) ? txData.transactions : [];
+            const positions = (portData && portData.success) ? (portData.positions || []) : [];
+
+            const symbolToCurrent = {};
+            positions.forEach(p => { symbolToCurrent[p.symbol] = Number(p.current_price || 0); });
+
+            const gridData = transactions.map(t => {
+                const current = symbolToCurrent[t.symbol];
+                const isSell = String(t.type).toLowerCase() === 'sell';
+                let pnl = null;
+                let pnlPct = null;
+                if (isSell) {
+                    pnl = (t.pnl !== null && t.pnl !== undefined) ? Number(t.pnl) : null;
+                    pnlPct = pnl !== null ? (pnl / (t.price * t.shares)) * 100 : null;
+                } else if (current) {
+                    pnl = (current - t.price) * t.shares;
+                    pnlPct = (current - t.price) / t.price * 100;
+                }
+                return {
+                    id: t.id,
+                    symbol: t.symbol,
+                    action: String(t.type).toUpperCase(),
+                    shares: Number(t.shares),
+                    price: Number(t.price),
+                    total: Number(t.total_amount),
+                    pnl: pnl,
+                    pnlPct: pnlPct,
+                    timestamp: new Date(t.timestamp).toLocaleString(),
+                    notes: t.notes || ''
+                };
+            });
+
+            if (!(typeof ej !== 'undefined' && ej.grids)) {
+                gridHost.innerHTML = `<div class="alert alert-warning">Syncfusion not available. Please ensure the library is loaded.</div>`;
+                return;
+            }
+
+            if (ej.base && typeof ej.base.setLicenseKey === 'function') {
+                try { ej.base.setLicenseKey('Ngo9BigBOggjHTQxAR8/V1JEaF5cXmRCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdmWXdec3VTRWZfU0BxWENWYE0='); } catch (_) {}
+            }
+
+            if (gridHost.ej2_instances && gridHost.ej2_instances.length) {
+                gridHost.ej2_instances.forEach(inst => inst.destroy());
+                gridHost.innerHTML = '';
+            }
+
+            const currencyTpl = args => args[args.column.field] != null ? Number(args[args.column.field]).toLocaleString(undefined, { style: 'currency', currency: 'USD' }) : '-';
+            const pnlTpl = args => args.pnl != null ? `<span class="fw-bold ${args.pnl >= 0 ? 'text-success' : 'text-danger'}">${Number(args.pnl).toLocaleString(undefined, { style: 'currency', currency: 'USD' })}</span>` : '-';
+            const pnlPctTpl = args => args.pnlPct != null ? `<span class="fw-bold ${args.pnlPct >= 0 ? 'text-success' : 'text-danger'}">${Number(args.pnlPct).toFixed(2)}%</span>` : '-';
+            const actionTpl = args => `<span class="badge ${args.action === 'BUY' ? 'bg-success' : 'bg-danger'}">${args.action}</span>`;
+
+            const grid = new ej.grids.Grid({
+                dataSource: gridData,
+                height: '400px',
+                allowSorting: true,
+                allowFiltering: true,
+                allowPaging: true,
+                pageSettings: { pageSize: 10 },
+                columns: [
+                    { field: 'symbol', headerText: 'Symbol', width: 100, textAlign: 'Center' },
+                    { field: 'action', headerText: 'Action', width: 90, template: actionTpl, textAlign: 'Center' },
+                    { field: 'shares', headerText: 'Qty', width: 100, textAlign: 'Right', format: 'N2' },
+                    { field: 'price', headerText: 'Price', width: 120, textAlign: 'Right', template: currencyTpl },
+                    { field: 'total', headerText: 'Total', width: 140, textAlign: 'Right', template: currencyTpl },
+                    { field: 'pnl', headerText: 'P&L', width: 140, textAlign: 'Right', template: pnlTpl },
+                    { field: 'pnlPct', headerText: 'P&L %', width: 120, textAlign: 'Right', template: pnlPctTpl },
+                    { field: 'timestamp', headerText: 'Timestamp', width: 180 },
+                    { field: 'notes', headerText: 'Notes', width: 200 }
+                ]
+            });
+            grid.appendTo(gridHost);
+        } catch (err) {
+            console.error('Error loading portfolio transactions:', err);
+            gridHost.innerHTML = `<div class="alert alert-danger">Failed to load transactions</div>`;
+        }
+    }
+
+    async savePortfolioSettings(portfolioId, title = 'Portfolio') {
+        try {
+            const getNumber = (id, pct = false) => {
+                const el = document.getElementById(id);
+                if (!el) return null;
+                const val = parseFloat(el.value);
+                if (isNaN(val) || val < 0) return null;
+                return pct ? val / 100.0 : val;
+            };
+
+            const payload = {};
+            const currentCash = getNumber('setting-current-cash');
+            if (currentCash !== null) payload.current_cash = currentCash;
+            const availableCashTrading = getNumber('setting-available-cash-trading');
+            if (availableCashTrading !== null) payload.available_cash_for_trading = availableCashTrading;
+            const cashForTrading = getNumber('setting-cash-for-trading');
+            if (cashForTrading !== null) payload.cash_for_trading = cashForTrading;
+            const txLimitPct = getNumber('setting-transaction-limit-pct', true);
+            if (txLimitPct !== null) payload.transaction_limit_pct = txLimitPct;
+            const stopLossPct = getNumber('setting-stop-loss-pct', true);
+            if (stopLossPct !== null) payload.stop_loss_pct = stopLossPct;
+            const stopGainPct = getNumber('setting-stop-gain-pct', true);
+            if (stopGainPct !== null) payload.stop_gain_pct = stopGainPct;
+            const safeNet = getNumber('setting-safe-net');
+            if (safeNet !== null) payload.safe_net = safeNet;
+
+            const resp = await fetch(`/api/portfolios/${portfolioId}/settings`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await resp.json();
+            if (!result.success) {
+                this.showAlert(result.error || 'Failed to update settings', 'danger');
+                return;
+            }
+            this.showAlert('Settings saved successfully', 'success');
+            // Reload portfolio and re-open modal to reflect updates
+            const refreshed = await (await fetch(`/api/portfolios/${portfolioId}`)).json();
+            if (refreshed.success) {
+                this.showPortfolioModal(refreshed.portfolio, title);
+            }
+        } catch (err) {
+            console.error('Error saving portfolio settings:', err);
+            this.showAlert('Error saving settings', 'danger');
+        }
     }
 
     async openAIRankingModal() {
@@ -3370,11 +3938,8 @@ class DataCollectionManager {
                             <button class="btn btn-outline-primary" onclick="viewStockAnalysis('${stock.symbol}')" title="View Analysis">
                                 <i class="fas fa-chart-line"></i>
                             </button>
-                            <button class="btn btn-outline-success" onclick="buyStock('${stock.symbol}')" title="Buy Stock">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                            <button class="btn btn-outline-warning" onclick="sellStock('${stock.symbol}')" title="Sell Stock">
-                                <i class="fas fa-minus"></i>
+                            <button class="btn btn-outline-info" onclick="buyStock('${stock.symbol}')" title="Trade Stock">
+                                <i class="fas fa-exchange-alt"></i>
                             </button>
                         </div>
                     </td>

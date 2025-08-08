@@ -2,6 +2,8 @@ from flask import Blueprint, request, jsonify
 import logging
 from datetime import datetime, date
 from typing import Dict, List, Optional
+import sqlite3
+import json
 
 from ..portfolio_management.portfolio_manager import PortfolioManager
 from ..portfolio_management.portfolio_database import PortfolioType, TransactionType
@@ -178,10 +180,50 @@ def buy_stock(portfolio_id: int):
                 'message': f'Successfully bought {shares} shares of {symbol}{price_msg}'
             })
         else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to buy stock'
-            }), 400
+            # Get the specific error from the portfolio manager
+            portfolio = portfolio_manager.db.get_portfolio(portfolio_id)
+            if portfolio:
+                # Load portfolio settings
+                settings = portfolio.settings or {}
+                available_cash = settings.get('available_cash_for_trading', portfolio.current_cash)
+                cash_for_trading = settings.get('cash_for_trading', portfolio.initial_cash)
+                transaction_limit_pct = settings.get('transaction_limit_pct', 0.02)
+                safe_net = settings.get('safe_net', 1000.0)
+                
+                # Calculate total cost - use provided price or get from portfolio manager
+                if price_float is not None:
+                    total_cost = float(shares) * price_float
+                else:
+                    # Try to get the last traded price for error calculation
+                    last_price = portfolio_manager._get_last_traded_price(symbol.upper())
+                    total_cost = float(shares) * (last_price or 0)
+                
+                # Check various constraints
+                if total_cost > available_cash:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Insufficient available cash for trading. Need ${total_cost:.2f}, have ${available_cash:.2f}'
+                    }), 400
+                elif total_cost > cash_for_trading * transaction_limit_pct:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Transaction exceeds {transaction_limit_pct*100:.1f}% limit. Cost: ${total_cost:.2f}, Limit: ${cash_for_trading * transaction_limit_pct:.2f}'
+                    }), 400
+                elif available_cash - total_cost < safe_net:
+                    return jsonify({
+                        'success': False,
+                        'error': f'Transaction would violate safe net. Remaining: ${available_cash - total_cost:.2f}, Safe net: ${safe_net:.2f}'
+                    }), 400
+                else:
+                    return jsonify({
+                        'success': False,
+                        'error': 'Failed to buy stock - check position limits or other constraints'
+                    }), 400
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Portfolio not found'
+                }), 404
         
     except Exception as e:
         logging.error(f"Error buying stock: {e}")
@@ -414,3 +456,49 @@ def get_portfolio_positions(portfolio_id: int):
             'success': False,
             'error': str(e)
         }), 500 
+
+@portfolio_api.route('/portfolios/<int:portfolio_id>/settings', methods=['PUT'])
+def update_portfolio_settings(portfolio_id: int):
+    """Update portfolio settings and optionally current cash."""
+    try:
+        data = request.get_json() or {}
+        
+        portfolio = portfolio_manager.db.get_portfolio(portfolio_id)
+        if not portfolio:
+            return jsonify({'success': False, 'error': 'Portfolio not found'}), 404
+        
+        # Extract top-level fields
+        current_cash = data.pop('current_cash', None)
+        
+        # Merge into settings dict (flat keys)
+        current_settings = portfolio.settings.copy() if portfolio.settings else {}
+        for key, value in data.items():
+            current_settings[key] = value
+        
+        # Persist
+        with sqlite3.connect(portfolio_manager.db.db_path) as conn:
+            cursor = conn.cursor()
+            if current_cash is not None:
+                cursor.execute(
+                    """
+                    UPDATE portfolios
+                    SET current_cash = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (float(current_cash), json.dumps(current_settings), portfolio_id),
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE portfolios
+                    SET settings = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (json.dumps(current_settings), portfolio_id),
+                )
+            conn.commit()
+        
+        return jsonify({'success': True, 'settings': current_settings})
+    except Exception as e:
+        logging.error(f"Error updating portfolio settings: {e}")
+        return jsonify({'success': False, 'error': str(e)}), 500 
