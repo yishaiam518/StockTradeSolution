@@ -214,6 +214,63 @@ class DataCollectionManager {
         this.quickTradeNotesEl = null;
     }
 
+    // Render scheduler window controls inside a card
+    _renderSchedulerWindowControls(cardEl, collection) {
+        try {
+            const controlsId = `sched-window-${collection.collection_id}`;
+            if (cardEl.querySelector(`#${controlsId}`)) return;
+            const html = `
+              <div id="${controlsId}" class="mt-2 small">
+                <div class="row g-2 align-items-end">
+                  <div class="col-4">
+                    <label class="form-label mb-1">Start (HH:MM)</label>
+                    <input type="time" class="form-control form-control-sm" id="${controlsId}-start" value="09:30">
+                  </div>
+                  <div class="col-4">
+                    <label class="form-label mb-1">End (HH:MM)</label>
+                    <input type="time" class="form-control form-control-sm" id="${controlsId}-end" value="16:00">
+                  </div>
+                  <div class="col-4">
+                    <label class="form-label mb-1">Weekdays (1-7)</label>
+                    <input type="text" class="form-control form-control-sm" id="${controlsId}-days" value="1,2,3,4,5" placeholder="1=Mon..7=Sun">
+                  </div>
+                </div>
+                <div class="mt-2 d-flex gap-2">
+                  <button class="btn btn-outline-secondary btn-sm" id="${controlsId}-save">Apply Window</button>
+                </div>
+              </div>`;
+            const schedControls = cardEl.querySelector('.scheduler-controls');
+            if (schedControls) {
+                schedControls.insertAdjacentHTML('beforeend', html);
+                const saveBtn = cardEl.querySelector(`#${controlsId}-save`);
+                saveBtn.addEventListener('click', async () => {
+                    const start = cardEl.querySelector(`#${controlsId}-start`).value || '09:30';
+                    const end = cardEl.querySelector(`#${controlsId}-end`).value || '16:00';
+                    const daysStr = cardEl.querySelector(`#${controlsId}-days`).value || '1,2,3,4,5';
+                    const weekdays = daysStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                    try {
+                        const resp = await fetch('/api/data-collection/scheduler/window', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ start, end, weekdays })
+                        });
+                        const res = await resp.json();
+                        if (res.success) {
+                            this.showAlert('Scheduler window updated', 'success');
+                        } else {
+                            this.showAlert(res.error || 'Failed to update scheduler window', 'danger');
+                        }
+                    } catch (err) {
+                        console.error('Failed to update scheduler window', err);
+                        this.showAlert('Failed to update scheduler window', 'danger');
+                    }
+                });
+            }
+        } catch (e) {
+            console.warn('Unable to render scheduler window controls', e);
+        }
+    }
+
     // Ensure a minimal quick trade modal exists in DOM
     ensureQuickTradeModal() {
         if (document.getElementById('quick-trade-modal')) {

@@ -107,6 +107,14 @@ data_collection:
     realtime_data: 300     # 5 minutes
     position_data: 60      # 1 minute for active positions
 
+  # Scheduler market window (controls when samples are collected)
+  scheduler_window:
+    enabled: true
+    timezone: "America/New_York"  # or US/Eastern
+    start: "09:30"   # inclusive
+    end:   "16:00"   # inclusive
+    weekdays: [1, 2, 3, 4, 5]  # Mon=1 .. Sun=7
+
 # Stock Selection and Scoring
 stock_selection:
   # Scoring weights for different factors

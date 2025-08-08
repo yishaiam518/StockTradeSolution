@@ -95,6 +95,9 @@ class DashboardApp:
         # Register portfolio API blueprint
         from .portfolio_api import portfolio_api
         self.app.register_blueprint(portfolio_api, url_prefix='/api')
+        # Register scheduler config API
+        from .api_routes import scheduler_api
+        self.app.register_blueprint(scheduler_api, url_prefix='/api')
         
                 # Configure Flask to serve static files with correct MIME types
         self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0

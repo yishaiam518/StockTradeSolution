@@ -28,14 +28,23 @@ class CollectionScheduler:
         # Default AI portfolio id (created at app bootstrap). Can be made configurable later.
         self.ai_portfolio_id = 2
 
-        # Market window controls (US/Eastern by default). Scheduler always runs,
-        # but will skip data updates outside this window when enabled.
-        self.skip_outside_window = True
-        self.market_timezone = 'US/Eastern'
-        # NYSE regular session
-        self.active_window_start = dt_time(hour=9, minute=30)
-        self.active_window_end = dt_time(hour=16, minute=0)
-        self.active_weekdays = {0, 1, 2, 3, 4}  # Mon-Fri
+        # Market window controls from config
+        from src.utils.config_loader import config as global_config
+        window_cfg = (global_config.get('data_collection.scheduler_window') or {})
+        self.skip_outside_window = bool(window_cfg.get('enabled', True))
+        self.market_timezone = window_cfg.get('timezone', 'America/New_York')
+        start_str = window_cfg.get('start', '09:30')
+        end_str = window_cfg.get('end', '16:00')
+        try:
+            start_h, start_m = [int(x) for x in start_str.split(':')]
+            end_h, end_m = [int(x) for x in end_str.split(':')]
+        except Exception:
+            start_h, start_m, end_h, end_m = 9, 30, 16, 0
+        self.active_window_start = dt_time(hour=start_h, minute=start_m)
+        self.active_window_end = dt_time(hour=end_h, minute=end_m)
+        w = window_cfg.get('weekdays', [1,2,3,4,5])
+        # Convert to Python weekday 0-6 (Mon=0) from 1-7
+        self.active_weekdays = { (d-1) % 7 for d in w }
         
         # Get interval from database or default to 24h
         collection_details = data_manager.get_collection_details(collection_id)
