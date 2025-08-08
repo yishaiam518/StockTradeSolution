@@ -22,6 +22,10 @@ class CollectionScheduler:
         self.logger = logging.getLogger(__name__)
         self.scheduler_thread = None
         self.is_running = False
+        # Hands-off AI automation controls
+        self.auto_execute_ai_trades = True
+        # Default AI portfolio id (created at app bootstrap). Can be made configurable later.
+        self.ai_portfolio_id = 2
         
         # Get interval from database or default to 24h
         collection_details = data_manager.get_collection_details(collection_id)
@@ -156,6 +160,11 @@ class CollectionScheduler:
                 
                 # Trigger AI ranking recalculation with new data
                 self._trigger_ai_ranking_recalculation()
+
+                # Optionally execute AI-managed portfolio trades based on fresh rankings
+                ai_actions = None
+                if self.auto_execute_ai_trades:
+                    ai_actions = self._execute_ai_portfolio_trades()
                 
                 # Store result for status reporting
                 self.last_result = {
@@ -164,6 +173,8 @@ class CollectionScheduler:
                     'failed_symbols': result.get('failed_symbols', 0),
                     'indicators_calculated': True,
                     'ai_ranking_updated': True,
+                    'ai_trades_executed': bool(ai_actions),
+                    'ai_actions_taken': (ai_actions or {}).get('actions_taken') if isinstance(ai_actions, dict) else None,
                     'timestamp': self.last_run.isoformat()
                 }
             else:
@@ -188,6 +199,29 @@ class CollectionScheduler:
             # Still update database times even if update failed
             self._update_database_times()
     
+    def _execute_ai_portfolio_trades(self):
+        """Run AI portfolio decisioning and execute trades hands-off."""
+        try:
+            self.logger.info("🤖 Executing AI portfolio automation")
+            from ..ai_ranking.hybrid_ranking_engine import HybridRankingEngine
+            from ..portfolio_management.portfolio_manager import PortfolioManager
+            
+            ranking_engine = HybridRankingEngine(self.data_manager)
+            portfolio_manager = PortfolioManager(self.data_manager, ranking_engine)
+            result = portfolio_manager.manage_ai_portfolio(
+                portfolio_id=self.ai_portfolio_id,
+                collection_id=self.collection_id
+            )
+            if result.get('success'):
+                actions = result.get('actions_taken', [])
+                self.logger.info(f"✅ AI automation complete. Actions taken: {len(actions)}")
+            else:
+                self.logger.warning(f"⚠️ AI automation did not run successfully: {result.get('error')}")
+            return result
+        except Exception as e:
+            self.logger.error(f"Error executing AI portfolio automation: {e}")
+            return {'success': False, 'error': str(e)}
+
     def _calculate_technical_indicators(self):
         """Calculate technical indicators for all symbols in this collection."""
         try:
