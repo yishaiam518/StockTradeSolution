@@ -220,23 +220,25 @@ class DataCollectionManager {
             const controlsId = `sched-window-${collection.collection_id}`;
             if (cardEl.querySelector(`#${controlsId}`)) return;
             const html = `
-              <div id="${controlsId}" class="mt-2 small">
-                <div class="row g-2 align-items-end">
+              <div id="${controlsId}" class="mt-3 small">
+                <div class="row g-3 align-items-end">
                   <div class="col-4">
-                    <label class="form-label mb-1">Start (HH:MM)</label>
+                    <label class="form-label mb-1 small">Start Time</label>
                     <input type="time" class="form-control form-control-sm" id="${controlsId}-start" value="09:30">
                   </div>
                   <div class="col-4">
-                    <label class="form-label mb-1">End (HH:MM)</label>
+                    <label class="form-label mb-1 small">End Time</label>
                     <input type="time" class="form-control form-control-sm" id="${controlsId}-end" value="16:00">
                   </div>
                   <div class="col-4">
-                    <label class="form-label mb-1">Weekdays (1-7)</label>
-                    <input type="text" class="form-control form-control-sm" id="${controlsId}-days" value="1,2,3,4,5" placeholder="1=Mon..7=Sun">
+                    <label class="form-label mb-1 small">Weekdays</label>
+                    <input type="text" class="form-control form-control-sm" id="${controlsId}-days" value="1,2,3,4,5" placeholder="Mon-Fri">
                   </div>
                 </div>
-                <div class="mt-2 d-flex gap-2">
-                  <button class="btn btn-outline-secondary btn-sm" id="${controlsId}-save">Apply Window</button>
+                <div class="row mt-3">
+                  <div class="col-12">
+                    <button class="btn btn-outline-secondary btn-sm w-100" id="${controlsId}-save">Apply Window Settings</button>
+                  </div>
                 </div>
               </div>`;
             const schedControls = cardEl.querySelector('.scheduler-controls');
@@ -716,7 +718,7 @@ class DataCollectionManager {
         
         collections.forEach(collection => {
             const card = document.createElement('div');
-            card.className = 'col-md-6 col-lg-4 mb-4';
+            card.className = 'col-lg-6 col-xl-4 mb-4';
             card.setAttribute('data-collection-id', collection.collection_id);
             
             const schedulerDisplay = collection.auto_update ? 'block' : 'none';
@@ -746,7 +748,7 @@ class DataCollectionManager {
                         
                         <!-- Action Buttons -->
                         <div class="action-buttons mt-3 mb-3">
-                            <div class="btn-group w-100" role="group">
+                            <div class="d-flex flex-wrap gap-1 justify-content-center">
                                 <button type="button" class="btn btn-primary btn-sm" onclick="viewCollection('${collection.collection_id}')">
                                     <i class="fas fa-chart-line"></i> View Data
                                 </button>
@@ -767,20 +769,18 @@ class DataCollectionManager {
 
                         <!-- Scheduler Controls -->
                         <div class="scheduler-controls mt-3">
-                            <!-- Row 1: Time Interval Selection (Full Width) -->
-                            <div class="col-12 mb-3">
-                                <div class="d-flex flex-column">
-                                    <label class="form-label small text-muted mb-2">Update Interval:</label>
-                                    <div class="d-flex flex-wrap gap-1">
-                                        ${intervalButtons}
-                                    </div>
-                                    <small class="text-muted mt-1">Current: ${collection.update_interval || '24h'}</small>
+                            <!-- Row 1: Time Interval Selection -->
+                            <div class="mb-3">
+                                <label class="form-label small text-muted mb-2">Update Interval:</label>
+                                <div class="d-flex flex-wrap gap-1 justify-content-center">
+                                    ${intervalButtons}
                                 </div>
+                                <small class="text-muted mt-1 d-block text-center">Current: ${collection.update_interval || '24h'}</small>
                             </div>
                             
                             <!-- Row 2: Start/Stop Controls and Status -->
-                            <div class="row">
-                                <div class="col-md-6">
+                            <div class="row g-2">
+                                <div class="col-6">
                                     <div class="btn-group w-100" role="group">
                                         <button type="button" class="btn btn-success btn-sm scheduler-btn" id="start-${collection.collection_id}" onclick="startScheduler('${collection.collection_id}')" style="display: ${collection.auto_update ? 'none' : 'inline-block'};">
                                             <i class="fas fa-play"></i> Start
@@ -790,7 +790,7 @@ class DataCollectionManager {
                                         </button>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-6">
                                     <div class="d-flex flex-column">
                                         <div class="small text-muted">
                                             <span id="last-run-${collection.collection_id}">Data: ${collection.last_run ? new Date(collection.last_run).toLocaleString() : 'Never'}</span> | 
@@ -826,6 +826,9 @@ class DataCollectionManager {
             
             row.appendChild(card);
             
+            // Inject Scheduler Window controls (Start/End/Weekdays) into the card
+            this._renderSchedulerWindowControls(card, collection);
+
             // Load indicators status for this collection
             this.loadCollectionIndicatorsStatus(collection.collection_id);
         });
@@ -4137,4 +4140,4 @@ window.viewStockAnalysis = function(symbol) {
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     window.dataCollectionManager = new DataCollectionManager();
-}); 
+});
