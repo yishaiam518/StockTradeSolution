@@ -792,10 +792,10 @@ class DataCollectionManager {
                         <!-- Action Buttons -->
                         <div class="action-buttons mt-3 mb-3">
                             <div class="d-flex flex-wrap gap-1 justify-content-center">
-                                <button type="button" class="btn btn-primary btn-sm" onclick="viewCollection('${collection.collection_id}')">
+                                <button type="button" class="btn btn-primary btn-sm" onclick="viewCollection('${collection.collection_id}')" style="display: none;">
                                     <i class="fas fa-chart-line"></i> View Data
                                 </button>
-                                <button type="button" class="btn btn-success btn-sm" onclick="openPerformanceAnalytics('${collection.collection_id}')">
+                                <button type="button" class="btn btn-success btn-sm" onclick="openPerformanceAnalytics('${collection.collection_id}')" style="display: none;">
                                     <i class="fas fa-chart-bar"></i> Analytics
                                 </button>
                                 <button type="button" class="btn btn-warning btn-sm" onclick="openAIRanking('${collection.collection_id}')">
