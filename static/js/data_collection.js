@@ -221,52 +221,15 @@ class DataCollectionManager {
             if (cardEl.querySelector(`#${controlsId}`)) return;
             const html = `
               <div id="${controlsId}" class="mt-3 small">
-                <div class="row g-3 align-items-end">
-                  <div class="col-4">
-                    <label class="form-label mb-1 small">Start Time</label>
-                    <input type="time" class="form-control form-control-sm" id="${controlsId}-start" value="09:30">
-                  </div>
-                  <div class="col-4">
-                    <label class="form-label mb-1 small">End Time</label>
-                    <input type="time" class="form-control form-control-sm" id="${controlsId}-end" value="16:00">
-                  </div>
-                  <div class="col-4">
-                    <label class="form-label mb-1 small">Weekdays</label>
-                    <input type="text" class="form-control form-control-sm" id="${controlsId}-days" value="1,2,3,4,5" placeholder="Mon-Fri">
-                  </div>
-                </div>
-                <div class="row mt-3">
-                  <div class="col-12">
-                    <button class="btn btn-outline-secondary btn-sm w-100" id="${controlsId}-save">Apply Window Settings</button>
-                  </div>
+                <div class="d-flex justify-content-center">
+                  <button class="btn btn-outline-primary btn-sm" onclick="window.dataCollectionManager.openSchedulerSettingsModal('${collection.collection_id}')">
+                    <i class="fas fa-clock"></i> Scheduler Settings
+                  </button>
                 </div>
               </div>`;
             const schedControls = cardEl.querySelector('.scheduler-controls');
             if (schedControls) {
                 schedControls.insertAdjacentHTML('beforeend', html);
-                const saveBtn = cardEl.querySelector(`#${controlsId}-save`);
-                saveBtn.addEventListener('click', async () => {
-                    const start = cardEl.querySelector(`#${controlsId}-start`).value || '09:30';
-                    const end = cardEl.querySelector(`#${controlsId}-end`).value || '16:00';
-                    const daysStr = cardEl.querySelector(`#${controlsId}-days`).value || '1,2,3,4,5';
-                    const weekdays = daysStr.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                    try {
-                        const resp = await fetch('/api/data-collection/scheduler/window', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ start, end, weekdays })
-                        });
-                        const res = await resp.json();
-                        if (res.success) {
-                            this.showAlert('Scheduler window updated', 'success');
-                        } else {
-                            this.showAlert(res.error || 'Failed to update scheduler window', 'danger');
-                        }
-                    } catch (err) {
-                        console.error('Failed to update scheduler window', err);
-                        this.showAlert('Failed to update scheduler window', 'danger');
-                    }
-                });
             }
         } catch (e) {
             console.warn('Unable to render scheduler window controls', e);
@@ -325,6 +288,86 @@ class DataCollectionManager {
               </div>
             </div>`;
         document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    // Ensure scheduler settings modal exists in DOM
+    ensureSchedulerSettingsModal() {
+        if (document.getElementById('schedulerSettingsModal')) {
+            return;
+        }
+        const modalHtml = `
+            <div class="modal fade" id="schedulerSettingsModal" tabindex="-1" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title">Scheduler Settings</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row g-3">
+                      <div class="col-6">
+                        <label class="form-label">Start Time</label>
+                        <input type="time" class="form-control" id="scheduler-start-time" value="09:30">
+                      </div>
+                      <div class="col-6">
+                        <label class="form-label">End Time</label>
+                        <input type="time" class="form-control" id="scheduler-end-time" value="16:00">
+                      </div>
+                    </div>
+                    <div class="mt-4">
+                      <label class="form-label">Business Days</label>
+                      <div class="d-flex gap-2 justify-content-center">
+                        <button type="button" class="btn btn-outline-secondary weekday-btn" data-day="1" style="min-width: 40px; padding: 8px 12px;">M</button>
+                        <button type="button" class="btn btn-outline-secondary weekday-btn" data-day="2" style="min-width: 40px; padding: 8px 12px;">T</button>
+                        <button type="button" class="btn btn-outline-secondary weekday-btn" data-day="3" style="min-width: 40px; padding: 8px 12px;">W</button>
+                        <button type="button" class="btn btn-outline-secondary weekday-btn" data-day="4" style="min-width: 40px; padding: 8px 12px;">T</button>
+                        <button type="button" class="btn btn-outline-secondary weekday-btn" data-day="5" style="min-width: 40px; padding: 8px 12px;">F</button>
+                      </div>
+                      <small class="form-text text-muted text-center d-block mt-2">Click to toggle business days (Monday-Friday)</small>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="save-scheduler-settings">Save Settings</button>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        
+        // Initialize weekday buttons with default selection (Mon-Fri)
+        setTimeout(() => {
+            const weekdayBtns = document.querySelectorAll('#schedulerSettingsModal .weekday-btn');
+            weekdayBtns.forEach(btn => {
+                const day = parseInt(btn.dataset.day);
+                if (day >= 1 && day <= 5) {
+                    btn.classList.remove('btn-outline-secondary');
+                    btn.classList.add('btn-primary');
+                }
+            });
+
+            // Add click handlers for weekday buttons
+            weekdayBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const isSelected = btn.classList.contains('btn-primary');
+                    if (isSelected) {
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-outline-secondary');
+                    } else {
+                        btn.classList.remove('btn-outline-secondary');
+                        btn.classList.add('btn-primary');
+                    }
+                });
+            });
+
+            // Add save button handler
+            const saveBtn = document.getElementById('save-scheduler-settings');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', () => {
+                    this.saveSchedulerSettings();
+                });
+            }
+        }, 100);
     }
 
     async openTradeModal(symbol) {
@@ -3905,6 +3948,109 @@ class DataCollectionManager {
         } catch (error) {
             console.error('Error opening AI ranking modal:', error);
             this.showAlert('Error opening AI ranking modal', 'danger');
+        }
+    }
+
+    async openSchedulerSettingsModal(collectionId) {
+        console.log('Opening scheduler settings modal for collection:', collectionId);
+        try {
+            // Ensure the modal exists in DOM
+            this.ensureSchedulerSettingsModal();
+            
+            // Show the modal
+            const modal = new bootstrap.Modal(document.getElementById('schedulerSettingsModal'));
+            modal.show();
+            
+            // Store the collection ID for saving
+            this.currentSchedulerCollectionId = collectionId;
+            
+            // Load current settings
+            await this.loadCurrentSchedulerSettings(collectionId);
+            
+        } catch (error) {
+            console.error('Error opening scheduler settings modal:', error);
+            this.showAlert('Error opening scheduler settings modal', 'danger');
+        }
+    }
+
+    async loadCurrentSchedulerSettings(collectionId) {
+        try {
+            // Load current settings from config
+            const response = await fetch('/api/data-collection/scheduler/window');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success) {
+                    const settings = data.settings || {};
+                    
+                    // Update time inputs
+                    const startTimeInput = document.getElementById('scheduler-start-time');
+                    const endTimeInput = document.getElementById('scheduler-end-time');
+                    if (startTimeInput) startTimeInput.value = settings.start || '09:30';
+                    if (endTimeInput) endTimeInput.value = settings.end || '16:00';
+                    
+                    // Update weekday buttons
+                    const weekdays = settings.weekdays || [1, 2, 3, 4, 5];
+                    const weekdayBtns = document.querySelectorAll('#schedulerSettingsModal .weekday-btn');
+                    weekdayBtns.forEach(btn => {
+                        const day = parseInt(btn.dataset.day);
+                        if (weekdays.includes(day)) {
+                            btn.classList.remove('btn-outline-secondary');
+                            btn.classList.add('btn-primary');
+                        } else {
+                            btn.classList.remove('btn-primary');
+                            btn.classList.add('btn-outline-secondary');
+                        }
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('Error loading current scheduler settings:', error);
+        }
+    }
+
+    async saveSchedulerSettings() {
+        try {
+            const startTime = document.getElementById('scheduler-start-time').value || '09:30';
+            const endTime = document.getElementById('scheduler-end-time').value || '16:00';
+            
+            // Get selected weekdays
+            const weekdayBtns = document.querySelectorAll('#schedulerSettingsModal .weekday-btn');
+            const selectedDays = Array.from(weekdayBtns)
+                .filter(btn => btn.classList.contains('btn-primary'))
+                .map(btn => parseInt(btn.dataset.day))
+                .sort();
+            
+            if (selectedDays.length === 0) {
+                this.showAlert('Please select at least one business day', 'warning');
+                return;
+            }
+            
+            // Save settings
+            const response = await fetch('/api/data-collection/scheduler/window', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    start: startTime, 
+                    end: endTime, 
+                    weekdays: selectedDays 
+                })
+            });
+            
+            const result = await response.json();
+            if (result.success) {
+                this.showAlert('Scheduler settings saved successfully', 'success');
+                
+                // Close the modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('schedulerSettingsModal'));
+                if (modal) {
+                    modal.hide();
+                }
+            } else {
+                this.showAlert(result.error || 'Failed to save scheduler settings', 'danger');
+            }
+        } catch (error) {
+            console.error('Error saving scheduler settings:', error);
+            this.showAlert('Error saving scheduler settings', 'danger');
         }
     }
 

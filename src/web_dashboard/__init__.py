@@ -11,10 +11,8 @@ This module provides a web-based dashboard for the trading system including:
 
 from .dashboard_app import DashboardApp
 from .chart_generator import ChartGenerator
-from .api_routes import APIRoutes
 
 __all__ = [
     'DashboardApp',
-    'ChartGenerator',
-    'APIRoutes'
-] 
+    'ChartGenerator'
+]
