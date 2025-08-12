@@ -1,7 +1,22 @@
 """
-Backtesting engine for the SMART STOCK TRADING SYSTEM.
+Backtesting Module
+Contains AI strategy backtesting functionality.
 """
 
-from .backtest_engine import BacktestEngine
+from .ai_backtesting_engine import (
+    AIBacktestingEngine,
+    BacktestParameters,
+    StrategyResult,
+    BacktestSummary,
+    StrategyType,
+    RiskLevel
+)
 
-__all__ = ['BacktestEngine'] 
+__all__ = [
+    'AIBacktestingEngine',
+    'BacktestParameters',
+    'StrategyResult',
+    'BacktestSummary',
+    'StrategyType',
+    'RiskLevel'
+] 

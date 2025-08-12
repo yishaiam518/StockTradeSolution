@@ -737,8 +737,8 @@ class PortfolioManager:
                     'performance_difference': user.total_pnl_pct - ai.total_pnl_pct,
                     'user_positions': user.positions_count,
                     'ai_positions': ai.positions_count,
-                    'user_cash_utilization': ((user.total_value - user.cash) / user.total_value) * 100,
-                    'ai_cash_utilization': ((ai.total_value - ai.cash) / ai.total_value) * 100
+                    'user_cash_utilization': ((user.total_value - user.cash) / user.total_value * 100) if user.total_value > 0 else 0,
+                    'ai_cash_utilization': ((ai.total_value - ai.cash) / ai.total_value * 100) if ai.total_value > 0 else 0
                 }
             
             return comparison

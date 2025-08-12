@@ -400,7 +400,7 @@
                                                 </div>
                                                 <div class="card-body">
                                                     <div class="row">
-                                                        <div class="col-md-6">
+                                                        <div class="col-md-4">
                                                             <div class="d-grid">
                                                                 <button class="btn btn-primary btn-lg" onclick="openUserPortfolioModal()">
                                                                     <i class="fas fa-user me-2"></i>User Portfolio
@@ -408,11 +408,19 @@
                                                                 </button>
                                                             </div>
                                                         </div>
-                                                        <div class="col-md-6">
+                                                        <div class="col-md-4">
                                                             <div class="d-grid">
                                                                 <button class="btn btn-info btn-lg" onclick="openAIPortfolioModal()">
                                                                     <i class="fas fa-robot me-2"></i>AI Portfolio
                                                                     <br><small class="text-white-50">AI-managed portfolio</small>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-4">
+                                                            <div class="d-grid">
+                                                                <button class="btn btn-warning btn-lg" onclick="openAIBacktestingModal()">
+                                                                    <i class="fas fa-chart-line me-2"></i>AI Backtesting
+                                                                    <br><small class="text-white-50">Test strategies on historical data</small>
                                                                 </button>
                                                             </div>
                                                         </div>
@@ -594,6 +602,7 @@
                     <!-- Syncfusion Charts -->
                     <script src="https://cdn.syncfusion.com/ej2/24.2.9/dist/ej2.min.js"></script>
                     <script src="/static/js/data_collection.js?v=10"></script>
+        <script src="/static/js/ai_backtesting.js"></script>
                     
                     <script>
                         // Load collections for analytics dropdown

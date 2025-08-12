@@ -77,6 +77,13 @@ function openAIPortfolioModal() {
     }
 }
 
+function openAIBacktestingModal() {
+    console.log('Open AI backtesting modal');
+    if (window.dataCollectionManager) {
+        window.dataCollectionManager.openAIBacktestingModal();
+    }
+}
+
 function openAIRankingModal() {
     console.log('Open AI ranking modal');
     if (window.dataCollectionManager) {
@@ -3657,29 +3664,81 @@ class DataCollectionManager {
             const result = await response.json();
             
             if (result.success) {
-                // Create and show portfolio modal
-                this.showPortfolioModal(result.portfolio, 'AI Portfolio');
+                // Create and show portfolio modal with complete result data
+                this.showPortfolioModal(result, 'AI Portfolio');
             } else {
                 this.showAlert('Failed to load AI portfolio', 'danger');
             }
         } catch (error) {
-            console.error('Error loading AI portfolio:', error);
+            console.error('Error loading AI portfolio', error);
             this.showAlert('Error loading AI portfolio', 'danger');
         }
     }
 
-    showPortfolioModal(portfolio, title) {
+    async openAIBacktestingModal() {
+        console.log('Opening AI backtesting modal');
+        try {
+            // Check if modal already exists
+            let modal = document.getElementById('aiBacktestingModal');
+            
+            if (!modal) {
+                // Load modal HTML from template
+                const response = await fetch('/templates/ai_backtesting_modal.html');
+                const modalHtml = await response.text();
+                
+                // Add modal to body
+                document.body.insertAdjacentHTML('beforeend', modalHtml);
+                
+                // Load the AI backtesting JavaScript
+                if (!document.querySelector('script[src*="ai_backtesting.js"]')) {
+                    const script = document.createElement('script');
+                    script.src = '/static/js/ai_backtesting.js';
+                    script.onload = () => {
+                        console.log('AI Backtesting script loaded');
+                        // Initialize the modal after script loads
+                        if (typeof AIBacktestingModal !== 'undefined') {
+                            console.log('AIBacktestingModal class found, creating instance');
+                            window.aiBacktestingModal = new AIBacktestingModal();
+                        } else {
+                            console.error('AIBacktestingModal class not found after script load');
+                        }
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    // Script already loaded, just initialize
+                    console.log('AI Backtesting script already loaded');
+                    if (typeof AIBacktestingModal !== 'undefined') {
+                        console.log('AIBacktestingModal class found, creating instance');
+                        window.aiBacktestingModal = new AIBacktestingModal();
+                    } else {
+                        console.error('AIBacktestingModal class not found in already loaded script');
+                    }
+                }
+            }
+            
+            // Show the modal
+            const bootstrapModal = new bootstrap.Modal(document.getElementById('aiBacktestingModal'));
+            bootstrapModal.show();
+            
+        } catch (error) {
+            console.error('Error opening AI backtesting modal:', error);
+            this.showAlert('Error opening AI backtesting modal', 'danger');
+        }
+    }
+
+    showPortfolioModal(result, title) {
         // Create a portfolio modal with editable trading parameters
+        const portfolio = result.portfolio;
+        const summary = result.summary;
         const s = portfolio.settings || {};
         const portfolioId = portfolio.id;
-        const cashForTrading = Number(s.cash_for_trading ?? portfolio.initial_cash ?? 0);
-        const availableCashForTrading = Number(s.available_cash_for_trading ?? portfolio.current_cash ?? 0);
+        const currentCash = Number((summary?.cash ?? portfolio.current_cash ?? 0));
+        const cashForTrading = Number(s.cash_for_trading ?? currentCash * 0.9 ?? 0);
         const transactionLimitPct = Number(s.transaction_limit_pct ?? 0.02);
         const transactionLimitAbs = cashForTrading * transactionLimitPct;
         const stopLossPct = Number(s.stop_loss_pct ?? 0.15);
         const stopGainPct = Number(s.stop_gain_pct ?? s.take_profit_pct ?? 0.25);
         const safeNet = Number(s.safe_net ?? 0);
-        const currentCash = Number((portfolio.summary?.cash ?? portfolio.current_cash ?? 0));
 
         const modalHtml = `
             <div class="modal fade" id="portfolioModal" tabindex="-1">
@@ -3693,20 +3752,13 @@ class DataCollectionManager {
                             <div class="row">
                                 <div class="col-md-6">
                                     <h6>Portfolio Summary</h6>
-                                    <div class="mb-2">
-                                        <label class="form-label">Available Cash</label>
-                                        <div class="input-group">
-                                            <span class="input-group-text">$</span>
-                                            <input id="setting-current-cash" type="number" min="0" step="0.01" class="form-control" value="${currentCash.toFixed(2)}" />
-                                        </div>
-                                    </div>
-                                    <p class="mb-1"><strong>Positions:</strong> ${portfolio.summary?.positions_count || 0}</p>
-                                    <p class="mb-1"><strong>Total Value:</strong> $${portfolio.summary?.total_value?.toFixed(2) || '0.00'}</p>
+                                    <p class="mb-1"><strong>Positions:</strong> ${summary?.positions_count || 0}</p>
+                                    <p class="mb-1"><strong>Total Value:</strong> $${summary?.total_value?.toFixed(2) || '0.00'}</p>
                                 </div>
                                 <div class="col-md-6">
                                     <h6>Performance</h6>
-                                    <p class="mb-1"><strong>Total P&L:</strong> $${portfolio.summary?.total_pnl?.toFixed(2) || '0.00'}</p>
-                                    <p class="mb-1"><strong>P&L %:</strong> ${portfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%</p>
+                                    <p class="mb-1"><strong>Total P&L:</strong> $${summary?.total_pnl?.toFixed(2) || '0.00'}</p>
+                                    <p class="mb-1"><strong>P&L %:</strong> ${summary?.total_pnl_pct?.toFixed(2) || '0.00'}%</p>
                                 </div>
                             </div>
                             <hr/>
@@ -3716,18 +3768,20 @@ class DataCollectionManager {
                                 </div>
                                 <div class="col-md-6">
                                     <div class="mb-2">
-                                        <label class="form-label">Available Cash for Trading</label>
+                                        <label class="form-label">Available Cash</label>
                                         <div class="input-group">
                                             <span class="input-group-text">$</span>
-                                            <input id="setting-available-cash-trading" type="number" min="0" step="0.01" class="form-control" value="${availableCashForTrading.toFixed(2)}" />
+                                            <input id="setting-available-cash" type="number" min="0" step="0.01" class="form-control" value="${currentCash.toFixed(2)}" />
                                         </div>
+                                        <small class="text-muted">Total portfolio cash (editable)</small>
                                     </div>
                                     <div class="mb-2">
-                                        <label class="form-label">Cash for Trading (Total)</label>
+                                        <label class="form-label">Cash for Trading</label>
                                         <div class="input-group">
                                             <span class="input-group-text">$</span>
-                                            <input id="setting-cash-for-trading" type="number" min="0" step="0.01" class="form-control" value="${cashForTrading.toFixed(2)}" />
+                                            <input id="setting-cash-for-trading" type="number" min="0" step="0.01" class="form-control" value="${cashForTrading.toFixed(2)}" readonly />
                                         </div>
+                                        <small class="text-muted">Available Cash - Position Values (calculated)</small>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
@@ -3791,6 +3845,20 @@ class DataCollectionManager {
         // Wire up save
         const modalEl = document.getElementById('portfolioModal');
         modalEl.querySelector('#save-portfolio-settings-btn').onclick = () => this.savePortfolioSettings(portfolioId, title);
+        
+        // Wire up Available Cash change to update Cash for Trading
+        const availableCashInput = modalEl.querySelector('#setting-available-cash');
+        const cashForTradingInput = modalEl.querySelector('#setting-cash-for-trading');
+        
+        if (availableCashInput && cashForTradingInput) {
+            availableCashInput.addEventListener('input', () => {
+                const newAvailableCash = parseFloat(availableCashInput.value) || 0;
+                const positionsValue = summary?.positions_value || 0;
+                const newCashForTrading = Math.max(0, newAvailableCash - positionsValue);
+                cashForTradingInput.value = newCashForTrading.toFixed(2);
+            });
+        }
+        
         modalEl.addEventListener('shown.bs.modal', () => {
             this.buildPortfolioTransactionsGrid(portfolioId, modalEl).catch(err => console.error('Error building transactions grid:', err));
         }, { once: true });
@@ -3898,10 +3966,8 @@ class DataCollectionManager {
             };
 
             const payload = {};
-            const currentCash = getNumber('setting-current-cash');
-            if (currentCash !== null) payload.current_cash = currentCash;
-            const availableCashTrading = getNumber('setting-available-cash-trading');
-            if (availableCashTrading !== null) payload.available_cash_for_trading = availableCashTrading;
+            const availableCash = getNumber('setting-available-cash');
+            if (availableCash !== null) payload.available_cash = availableCash;
             const cashForTrading = getNumber('setting-cash-for-trading');
             if (cashForTrading !== null) payload.cash_for_trading = cashForTrading;
             const txLimitPct = getNumber('setting-transaction-limit-pct', true);
@@ -3927,7 +3993,7 @@ class DataCollectionManager {
             // Reload portfolio and re-open modal to reflect updates
             const refreshed = await (await fetch(`/api/portfolios/${portfolioId}`)).json();
             if (refreshed.success) {
-                this.showPortfolioModal(refreshed.portfolio, title);
+                this.showPortfolioModal(refreshed, title);
             }
         } catch (err) {
             console.error('Error saving portfolio settings:', err);

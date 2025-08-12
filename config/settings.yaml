@@ -109,7 +109,7 @@ data_collection:
 
   # Scheduler market window (controls when samples are collected)
   scheduler_window:
-    enabled: true
+    enabled: false  # Disabled to allow 24/7 AI portfolio management
     timezone: "America/New_York"  # or US/Eastern
     start: "09:30"   # inclusive
     end:   "16:00"   # inclusive

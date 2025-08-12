@@ -175,12 +175,28 @@ class CollectionScheduler:
                     f"⏸️ Outside active market window ({self.active_window_start.strftime('%H:%M')} - "
                     f"{self.active_window_end.strftime('%H:%M')} {self.market_timezone}). Skipping data update."
                 )
-                # Still update next/last run bookkeeping so UI status looks alive
-                self.last_result = {
-                    'success': True,
-                    'skipped_due_to_market_window': True,
-                    'timestamp': self.last_run.isoformat()
-                }
+                
+                # Even outside market hours, update portfolio prices and run AI decisions
+                if self.auto_execute_ai_trades:
+                    self.logger.info("🔄 Running AI portfolio management outside market hours...")
+                    ai_actions = self._execute_ai_portfolio_trades()
+                    self._update_portfolio_prices()
+                    
+                    self.last_result = {
+                        'success': True,
+                        'skipped_due_to_market_window': True,
+                        'ai_trades_executed': bool(ai_actions),
+                        'ai_actions_taken': (ai_actions or {}).get('actions_taken') if isinstance(ai_actions, dict) else None,
+                        'timestamp': self.last_run.isoformat()
+                    }
+                else:
+                    # Still update next/last run bookkeeping so UI status looks alive
+                    self.last_result = {
+                        'success': True,
+                        'skipped_due_to_market_window': True,
+                        'timestamp': self.last_run.isoformat()
+                    }
+                
                 self._update_database_times()
                 return
             
@@ -199,6 +215,9 @@ class CollectionScheduler:
                 ai_actions = None
                 if self.auto_execute_ai_trades:
                     ai_actions = self._execute_ai_portfolio_trades()
+                
+                # Force portfolio price updates to refresh P&L
+                self._update_portfolio_prices()
                 
                 # Store result for status reporting
                 self.last_result = {
@@ -462,6 +481,39 @@ class CollectionScheduler:
             status['ai_ranking_metadata'] = self.last_ai_ranking_metadata
         
         return status
+    
+    def _update_portfolio_prices(self):
+        """Force update of portfolio prices to refresh P&L calculations."""
+        try:
+            from ..portfolio_management.portfolio_manager import PortfolioManager
+            
+            # Get current market prices for portfolio symbols
+            portfolio_manager = PortfolioManager(self.data_manager)
+            
+            # Update AI portfolio prices (portfolio ID 2)
+            try:
+                # Get current prices for common symbols
+                symbols = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'NVDA', 'META', 'NFLX', 'AMD', 'INTC']
+                price_data = {}
+                
+                for symbol in symbols:
+                    try:
+                        # Get latest price from data manager
+                        latest_data = self.data_manager.get_latest_data(symbol, self.collection_id)
+                        if latest_data and 'close' in latest_data:
+                            price_data[symbol] = latest_data['close']
+                    except Exception as e:
+                        self.logger.debug(f"Could not get price for {symbol}: {e}")
+                
+                if price_data:
+                    portfolio_manager.update_portfolio_prices(2, price_data)
+                    self.logger.info(f"Updated portfolio prices for {len(price_data)} symbols")
+                
+            except Exception as e:
+                self.logger.warning(f"Could not update portfolio prices: {e}")
+                
+        except Exception as e:
+            self.logger.error(f"Error in portfolio price update: {e}")
 
 
 class DataCollectionScheduler:

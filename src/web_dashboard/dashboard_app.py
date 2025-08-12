@@ -98,6 +98,31 @@ class DashboardApp:
         # Register scheduler config API
         from .api_routes import scheduler_api
         self.app.register_blueprint(scheduler_api, url_prefix='/api')
+        # Register AI backtesting API blueprint
+        try:
+            from .ai_backtesting_api import ai_backtesting_api
+            self.app.register_blueprint(ai_backtesting_api, url_prefix='/api')
+            self.logger.info("AI backtesting API blueprint registered successfully")
+        except Exception as e:
+            self.logger.error(f"Failed to register AI backtesting API blueprint: {e}")
+            import traceback
+            self.logger.error(traceback.format_exc())
+            
+        # Add AI backtesting routes directly if blueprint fails
+        @self.app.route('/api/ai-backtesting/status', methods=['GET'])
+        def ai_backtesting_status():
+            """Get AI backtesting status."""
+            try:
+                from src.backtesting.ai_backtesting_engine import AIBacktestingEngine
+                engine = AIBacktestingEngine()
+                return jsonify({
+                    'success': True,
+                    'engine_status': 'ready',
+                    'has_results': len(engine.get_results()) > 0,
+                    'total_strategies_tested': len(engine.get_results())
+                })
+            except Exception as e:
+                return jsonify({'success': False, 'error': str(e)}), 500
         
                 # Configure Flask to serve static files with correct MIME types
         self.app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
@@ -161,6 +186,16 @@ class DashboardApp:
         def test_stock_viewer():
             """Test page for stock viewer JavaScript."""
             return render_template('test_stock_viewer.html')
+            
+        @self.app.route('/templates/ai_backtesting_modal.html')
+        def ai_backtesting_modal():
+            """Serve the AI backtesting modal template."""
+            return render_template('ai_backtesting_modal.html')
+            
+        @self.app.route('/test-ai-backtesting')
+        def test_ai_backtesting():
+            """Test page for AI backtesting modal."""
+            return render_template('test_ai_backtesting_modal.html')
         
         @self.app.route('/debug_stock_viewer.js')
         def debug_stock_viewer_js():

@@ -18,45 +18,124 @@ data_manager = DataManager()
 hybrid_ranking_engine = HybridRankingEngine(data_manager)
 portfolio_manager = PortfolioManager(data_manager, hybrid_ranking_engine)
 
-@portfolio_api.route('/portfolios', methods=['GET'])
-def get_portfolios():
-    """Get all portfolios."""
-    try:
-        portfolios = portfolio_manager.db.get_all_portfolios()
-        
-        portfolio_data = []
-        for portfolio in portfolios:
-            summary = portfolio_manager.get_portfolio_summary(portfolio.id)
-            portfolio_data.append({
-                'id': portfolio.id,
-                'name': portfolio.name,
-                'type': portfolio.portfolio_type.value,
-                'initial_cash': portfolio.initial_cash,
-                'current_cash': portfolio.current_cash,
-                'created_at': portfolio.created_at.isoformat(),
-                'updated_at': portfolio.updated_at.isoformat(),
-                'settings': portfolio.settings,
-                'summary': {
-                    'total_value': summary.total_value if summary else 0,
-                    'total_pnl': summary.total_pnl if summary else 0,
-                    'total_pnl_pct': summary.total_pnl_pct if summary else 0,
-                    'positions_count': summary.positions_count if summary else 0,
-                    'cash': summary.cash if summary else 0,
-                    'positions_value': summary.positions_value if summary else 0
-                } if summary else None
+@portfolio_api.route('/portfolios', methods=['GET', 'POST'])
+def portfolios():
+    """Get all portfolios or create a new portfolio."""
+    if request.method == 'GET':
+        try:
+            portfolios = portfolio_manager.db.get_all_portfolios()
+            
+            portfolio_data = []
+            for portfolio in portfolios:
+                summary = portfolio_manager.get_portfolio_summary(portfolio.id)
+                portfolio_data.append({
+                    'id': portfolio.id,
+                    'name': portfolio.name,
+                    'type': portfolio.portfolio_type.value,
+                    'initial_cash': portfolio.initial_cash,
+                    'current_cash': portfolio.current_cash,
+                    'created_at': portfolio.created_at.isoformat(),
+                    'updated_at': portfolio.updated_at.isoformat(),
+                    'settings': portfolio.settings,
+                    'summary': {
+                        'total_value': summary.total_value if summary else 0,
+                        'total_pnl': summary.total_pnl if summary else 0,
+                        'total_pnl_pct': summary.total_pnl_pct if summary else 0,
+                        'positions_count': summary.positions_count if summary else 0,
+                        'cash': summary.cash if summary else 0,
+                        'positions_value': summary.positions_value if summary else 0
+                    } if summary else None
+                })
+            
+            return jsonify({
+                'success': True,
+                'portfolios': portfolio_data
             })
-        
-        return jsonify({
-            'success': True,
-            'portfolios': portfolio_data
-        })
-        
-    except Exception as e:
-        logging.error(f"Error getting portfolios: {e}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+            
+        except Exception as e:
+            logging.error(f"Error getting portfolios: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+    
+    elif request.method == 'POST':
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({
+                    'success': False,
+                    'error': 'No data provided'
+                }), 400
+            
+            name = data.get('name', 'New Portfolio')
+            portfolio_type = data.get('portfolio_type', 'user_managed')
+            initial_cash = data.get('initial_cash', 50000.0)  # Increased to $50,000 for testing
+            
+            # Convert portfolio type string to enum
+            if portfolio_type == 'ai_managed':
+                portfolio_type_enum = PortfolioType.AI_MANAGED
+            else:
+                portfolio_type_enum = PortfolioType.USER_MANAGED
+            
+            # Create default settings for the new portfolio
+            from src.portfolio_management.portfolio_manager import PortfolioSettings, RiskLevel
+            
+            if portfolio_type == 'ai_managed':
+                default_settings = PortfolioSettings(
+                    initial_cash=initial_cash,
+                    max_position_size=0.08,
+                    max_positions=15,
+                    cash_reserve_pct=0.10,
+                    risk_level=RiskLevel.CONSERVATIVE,
+                    rebalance_frequency="monthly",
+                    cash_for_trading=initial_cash,
+                    available_cash_for_trading=initial_cash,
+                    transaction_limit_pct=0.50,  # Increased to 50% for testing
+                    safe_net=100.0,  # Reduced safe net for testing
+                    stop_loss_pct=0.12,
+                    stop_gain_pct=0.20
+                )
+            else:
+                default_settings = PortfolioSettings(
+                    initial_cash=initial_cash,
+                    max_position_size=0.10,
+                    max_positions=20,
+                    cash_reserve_pct=0.10,
+                    risk_level=RiskLevel.MODERATE,
+                    rebalance_frequency="monthly",
+                    cash_for_trading=initial_cash,
+                    available_cash_for_trading=initial_cash,
+                    transaction_limit_pct=0.50,  # Increased to 50% for testing
+                    safe_net=100.0,  # Reduced safe net for testing
+                    stop_loss_pct=0.15,
+                    stop_gain_pct=0.25
+                )
+            
+            # Convert enum to string for JSON serialization
+            settings_dict = default_settings.__dict__.copy()
+            settings_dict['risk_level'] = default_settings.risk_level.value
+            
+            # Create portfolio
+            portfolio_id = portfolio_manager.db.create_portfolio(
+                name=name,
+                portfolio_type=portfolio_type_enum,
+                initial_cash=initial_cash,
+                settings=settings_dict
+            )
+            
+            return jsonify({
+                'success': True,
+                'portfolio_id': portfolio_id,
+                'message': f'Portfolio "{name}" created successfully'
+            })
+            
+        except Exception as e:
+            logging.error(f"Error creating portfolio: {e}")
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
 
 @portfolio_api.route('/portfolios/<int:portfolio_id>', methods=['GET'])
 def get_portfolio(portfolio_id: int):
@@ -469,6 +548,7 @@ def update_portfolio_settings(portfolio_id: int):
         
         # Extract top-level fields
         current_cash = data.pop('current_cash', None)
+        available_cash = data.pop('available_cash', None)
         
         # Merge into settings dict (flat keys)
         current_settings = portfolio.settings.copy() if portfolio.settings else {}
@@ -478,7 +558,18 @@ def update_portfolio_settings(portfolio_id: int):
         # Persist
         with sqlite3.connect(portfolio_manager.db.db_path) as conn:
             cursor = conn.cursor()
-            if current_cash is not None:
+            
+            # If available_cash is provided, update both current_cash and settings
+            if available_cash is not None:
+                cursor.execute(
+                    """
+                    UPDATE portfolios
+                    SET current_cash = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (float(available_cash), json.dumps(current_settings), portfolio_id),
+                )
+            elif current_cash is not None:
                 cursor.execute(
                     """
                     UPDATE portfolios
