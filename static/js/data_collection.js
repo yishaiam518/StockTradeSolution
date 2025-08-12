@@ -3646,8 +3646,8 @@ class DataCollectionManager {
             const result = await response.json();
             
             if (result.success) {
-                // Create and show portfolio modal
-                this.showPortfolioModal(result.portfolio, 'User Portfolio');
+                // Create and show portfolio modal with complete result data
+                this.showPortfolioModal(result, 'User Portfolio');
             } else {
                 this.showAlert('Failed to load user portfolio', 'danger');
             }
@@ -3728,8 +3728,14 @@ class DataCollectionManager {
 
     showPortfolioModal(result, title) {
         // Create a portfolio modal with editable trading parameters
+        if (!result || !result.portfolio) {
+            console.error('Invalid result object passed to showPortfolioModal:', result);
+            this.showAlert('Invalid portfolio data received', 'danger');
+            return;
+        }
+        
         const portfolio = result.portfolio;
-        const summary = result.summary;
+        const summary = result.summary || {};
         const s = portfolio.settings || {};
         const portfolioId = portfolio.id;
         const currentCash = Number((summary?.cash ?? portfolio.current_cash ?? 0));
