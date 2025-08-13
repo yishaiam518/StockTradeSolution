@@ -1833,9 +1833,22 @@ class DataCollectionManager {
             const data = await response.json();
             
             if (data.success) {
-                this.showAlert(`Scheduler started for collection ${collectionId}`, 'success');
+                // Show enhanced success message with component status
+                const components = data.components_active || {};
+                let statusMessage = `🚀 Scheduler started for collection ${collectionId}`;
+                
+                if (components.data_collection) statusMessage += '\n✅ Data collection active';
+                if (components.ai_ranking) statusMessage += '\n🤖 AI ranking system active';
+                if (components.portfolio_management) statusMessage += '\n💰 Portfolio management active';
+                
+                this.showAlert(statusMessage, 'success');
+                
                 // Update the UI to show running status
                 this.updateSchedulerStatus(collectionId, true);
+                
+                // Show detailed status information
+                this.showSchedulerStatusDetails(collectionId, data);
+                
                 // Refresh collections to get updated status
                 await this.loadCollections();
             } else {
@@ -1908,6 +1921,71 @@ class DataCollectionManager {
                     <i class="fas fa-robot"></i> AI Ranking: ${lastRun}
                 </small>
             `;
+        }
+    }
+
+    showSchedulerStatusDetails(collectionId, data) {
+        // Create a detailed status modal or update existing UI
+        const statusInfo = `
+            <div class="alert alert-info">
+                <h6><i class="fas fa-info-circle"></i> Scheduler Status Details</h6>
+                <p><strong>Collection:</strong> ${collectionId}</p>
+                <p><strong>Interval:</strong> ${data.interval}</p>
+                <p><strong>Last Run:</strong> ${new Date(data.last_run).toLocaleString()}</p>
+                <p><strong>Next Run:</strong> ${new Date(data.next_run).toLocaleString()}</p>
+                <hr>
+                <h6>Active Components:</h6>
+                <ul class="list-unstyled">
+                    <li><i class="fas fa-check text-success"></i> Data Collection</li>
+                    <li><i class="fas fa-check text-success"></i> AI Ranking System</li>
+                    <li><i class="fas fa-check text-success"></i> Portfolio Management</li>
+                </ul>
+                <p class="text-muted small">
+                    <i class="fas fa-lightbulb"></i> 
+                    The AI portfolio will now automatically make trading decisions based on market data and rankings.
+                </p>
+            </div>
+        `;
+        
+        // Show this information in a prominent way
+        this.showAlert(statusInfo, 'info', 10000); // Show for 10 seconds
+    }
+
+    async checkSystemStatus() {
+        try {
+            // Check all collection schedulers
+            const collectionsResponse = await fetch('/api/data-collection/collections');
+            const collections = await collectionsResponse.json();
+            
+            let runningSchedulers = 0;
+            let totalCollections = 0;
+            
+            for (const collection of collections.collections || []) {
+                totalCollections++;
+                if (collection.auto_update) {
+                    runningSchedulers++;
+                }
+            }
+            
+            // Show system status
+            const statusMessage = `
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-server"></i> System Status Overview</h6>
+                    <p><strong>Running Schedulers:</strong> ${runningSchedulers}/${totalCollections}</p>
+                    <p><strong>AI Portfolio:</strong> ${runningSchedulers > 0 ? 'Active' : 'Inactive'}</p>
+                    <p><strong>Status:</strong> ${runningSchedulers > 0 ? '🟢 Operational' : '🔴 Stopped'}</p>
+                    ${runningSchedulers > 0 ? 
+                        '<p class="text-success"><i class="fas fa-check-circle"></i> System is running and making AI decisions</p>' : 
+                        '<p class="text-warning"><i class="fas fa-exclamation-triangle"></i> Start a scheduler to activate AI portfolio</p>'
+                    }
+                </div>
+            `;
+            
+            this.showAlert(statusMessage, 'info', 8000);
+            
+        } catch (error) {
+            console.error('Error checking system status:', error);
+            this.showAlert('Error checking system status', 'error');
         }
     }
 

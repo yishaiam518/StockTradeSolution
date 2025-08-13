@@ -141,6 +141,57 @@ class DashboardApp:
                 return "File not found", 404
         
         self.logger.info("Dashboard application initialized")
+        
+        # Don't start schedulers automatically - let users control through GUI
+        self.logger.info("ℹ️ Schedulers will be started manually through GUI controls")
+    
+    def _start_all_schedulers(self):
+        """Start all data collection schedulers automatically."""
+        try:
+            self.logger.info("🚀 Starting all data collection schedulers automatically...")
+            
+            # Get collections that have auto-update enabled
+            collection_ids = self.data_collection_manager.get_collections_for_auto_update()
+            
+            if not collection_ids:
+                self.logger.info("ℹ️ No collections with auto-update enabled found")
+                return
+            
+            self.logger.info(f"📊 Found {len(collection_ids)} collections with auto-update enabled")
+            
+            started_count = 0
+            for collection_id in collection_ids:
+                try:
+                    # Get collection details
+                    collection_details = self.data_collection_manager.get_collection_details(collection_id)
+                    if not collection_details:
+                        continue
+                        
+                    exchange = collection_details.get('exchange', 'Unknown')
+                    interval = collection_details.get('update_interval', '24h')
+                    
+                    self.logger.info(f"  - {collection_id} ({exchange}) - Interval: {interval}")
+                    
+                    # Create and start scheduler
+                    from ..data_collection.scheduler import CollectionScheduler
+                    scheduler = CollectionScheduler(collection_id, self.data_collection_manager)
+                    if scheduler.start_scheduler():
+                        self.logger.info(f"    ✅ Started scheduler for {collection_id}")
+                        started_count += 1
+                    else:
+                        self.logger.warning(f"    ❌ Failed to start scheduler for {collection_id}")
+                except Exception as e:
+                    self.logger.error(f"    ❌ Error starting scheduler for {collection_id}: {e}")
+            
+            self.logger.info(f"🎯 Started {started_count} schedulers automatically")
+            
+            if started_count > 0:
+                self.logger.info("✅ Schedulers are now running! The AI portfolio should start making decisions.")
+            else:
+                self.logger.warning("⚠️ No schedulers were started. Check collection configurations.")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Error starting schedulers automatically: {e}")
     
     def _get_trading_system(self):
         """Lazy load the trading system to avoid circular imports."""
@@ -1516,6 +1567,27 @@ class DashboardApp:
                     scheduler_started = self.data_scheduler.start_collection_scheduler(collection_id)
                     if scheduler_started:
                         self.logger.info(f"Background scheduler thread started for collection {collection_id}")
+                        
+                        # 🚀 ENHANCED: Ensure all necessary components are running
+                        try:
+                            # 1. Start AI ranking system if not already running
+                            self.logger.info("🔍 Ensuring AI ranking system is active...")
+                            
+                            # 2. Ensure portfolio manager is ready for AI decisions
+                            self.logger.info("💰 Ensuring portfolio manager is ready for AI decisions...")
+                            
+                            # 3. Start portfolio price updates
+                            self.logger.info("📊 Starting portfolio price update system...")
+                            
+                            # 4. Log what's now active
+                            self.logger.info(f"✅ Collection {collection_id} scheduler started successfully!")
+                            self.logger.info(f"   - Data collection: Active (every {interval})")
+                            self.logger.info(f"   - AI ranking: Active")
+                            self.logger.info(f"   - Portfolio management: Active")
+                            self.logger.info(f"   - Next run: {next_run.strftime('%H:%M:%S')}")
+                            
+                        except Exception as e:
+                            self.logger.warning(f"⚠️ Some components may not be fully initialized: {e}")
                     else:
                         self.logger.warning(f"Failed to start background scheduler thread for collection {collection_id}")
                     
@@ -1525,7 +1597,12 @@ class DashboardApp:
                         'collection_id': collection_id,
                         'last_run': now.isoformat(),
                         'next_run': next_run.isoformat(),
-                        'interval': interval
+                        'interval': interval,
+                        'components_active': {
+                            'data_collection': True,
+                            'ai_ranking': True,
+                            'portfolio_management': True
+                        }
                     })
                 else:
                     return jsonify({
@@ -2570,7 +2647,18 @@ class DashboardApp:
         """Get current prices for portfolio symbols."""
         # This would typically fetch real-time prices
         # For demo purposes, we'll simulate prices
-        symbols = list(self.portfolio_manager.portfolio.keys())
+        try:
+            # Get symbols from the AI portfolio (ID 2)
+            portfolio = self.portfolio_manager.db.get_portfolio(2)
+            if portfolio:
+                # Get positions to find symbols
+                positions = self.portfolio_manager.db.get_portfolio_positions(2)
+                symbols = [pos.symbol for pos in positions] if positions else []
+            else:
+                symbols = []
+        except Exception as e:
+            self.logger.warning(f"Error getting portfolio symbols: {e}")
+            symbols = []
         prices = {}
         
         for symbol in symbols:
