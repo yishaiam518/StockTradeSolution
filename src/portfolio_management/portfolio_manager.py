@@ -571,8 +571,8 @@ class PortfolioManager:
             # Process ranking results
             for stock in ranking_results.dual_scores:
                 symbol = stock.symbol
-                # Calculate combined score as average of OpenAI and local scores
-                combined_score = (stock.openai_score + stock.local_score) / 2
+                # Use the pre-calculated combined score from hybrid ranking
+                combined_score = stock.combined_score
                 # Generate recommendation based on combined score
                 if combined_score >= 75:
                     recommendation = "Strong Buy"
@@ -585,8 +585,11 @@ class PortfolioManager:
                 else:
                     recommendation = "Strong Sell"
                 
-                # Get current price (simplified - in real implementation, get from data manager)
-                current_price = 100.0  # Placeholder - should get real price
+                # Get current price from data manager
+                current_price = self._get_last_traded_price(symbol)
+                if current_price is None:
+                    self.logger.warning(f"Could not fetch price for {symbol}, skipping decision")
+                    continue
                 
                 # Decision logic
                 decision = self._make_ai_decision(
@@ -672,7 +675,7 @@ class PortfolioManager:
                 max_position_value = portfolio_summary.total_value * settings.max_position_size
                 shares = max_position_value / current_price
                 
-                if shares > 0 and portfolio_summary.cash >= (shares * current_price):
+                if shares > 0 and settings.available_cash_for_trading >= (shares * current_price):
                     decision.update({
                         'action': 'buy',
                         'shares': shares,
