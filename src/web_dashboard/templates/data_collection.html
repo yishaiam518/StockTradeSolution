@@ -440,39 +440,159 @@
                                                                 </div>
                                                                 <div class="card-body">
                                                                     <div class="row" id="portfolio-summary">
-                                                                        <div class="col-md-3">
-                                                                            <div class="text-center">
-                                                                                <h6 class="text-muted">User Portfolio</h6>
-                                                                                <h4 class="text-primary" id="user-portfolio-value">$0.00</h4>
-                                                                                <small class="text-muted" id="user-portfolio-pnl">P&L: $0.00 (0.00%)</small>
+                                                                        <!-- User Portfolio -->
+                                                                        <div class="col-md-6">
+                                                                            <div class="card border-primary">
+                                                                                <div class="card-header bg-primary text-white">
+                                                                                    <h6 class="mb-0"><i class="fas fa-user me-2"></i>User Portfolio</h6>
+                                                                                </div>
+                                                                                <div class="card-body">
+                                                                                    <div class="row">
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Available Cash</h6>
+                                                                                                <h5 class="text-primary" id="user-portfolio-cash">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Total Value</h6>
+                                                                                                <h5 class="text-primary" id="user-portfolio-value">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div class="row mt-2">
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">P&L %</h6>
+                                                                                                <h5 class="text-success" id="user-portfolio-pnl-pct">0.00%</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">P&L $</h6>
+                                                                                                <h5 class="text-success" id="user-portfolio-pnl-value">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div class="row mt-2">
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Positions</h6>
+                                                                                                <h5 class="text-info" id="user-portfolio-positions">0</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Transaction $</h6>
+                                                                                                <h5 class="text-info" id="user-portfolio-transaction-value">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
-                                                                        <div class="col-md-3">
-                                                                            <div class="text-center">
-                                                                                <h6 class="text-muted">AI Portfolio</h6>
-                                                                                <h4 class="text-info" id="ai-portfolio-value">$0.00</h4>
-                                                                                <small class="text-muted" id="ai-portfolio-pnl">P&L: $0.00 (0.00%)</small>
+                                                                        
+                                                                        <!-- AI Portfolio -->
+                                                                        <div class="col-md-6">
+                                                                            <div class="card border-info">
+                                                                                <div class="card-header bg-info text-white">
+                                                                                    <h6 class="mb-0"><i class="fas fa-robot me-2"></i>AI Portfolio</h6>
+                                                                                </div>
+                                                                                <div class="card-body">
+                                                                                    <div class="row">
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Available Cash</h6>
+                                                                                                <h5 class="text-info" id="ai-portfolio-cash">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Total Value</h6>
+                                                                                                <h5 class="text-info" id="ai-portfolio-value">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div class="row mt-2">
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">P&L %</h6>
+                                                                                <h5 class="text-success" id="ai-portfolio-pnl-pct">0.00%</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">P&L $</h6>
+                                                                                <h5 class="text-success" id="ai-portfolio-pnl-value">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    <div class="row mt-2">
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">Positions</h6>
+                                                                                <h5 class="text-info" id="ai-portfolio-positions">0</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-6">
+                                                                                            <div class="text-center">
+                                                                                <h6 class="text-muted">Transaction $</h6>
+                                                                                <h5 class="text-info" id="ai-portfolio-transaction-value">$0.00</h5>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
                                                                             </div>
                                                                         </div>
-                                                                        <div class="col-md-3">
-                                                                            <div class="text-center">
-                                                                                <h6 class="text-muted">Total Positions</h6>
-                                                                                <h4 class="text-success" id="total-positions">0</h4>
-                                                                                <small class="text-muted">Active positions</small>
-                                                                            </div>
-                                                                        </div>
-                                                                        <div class="col-md-3">
-                                                                            <div class="text-center">
-                                                                                <h6 class="text-muted">Today's Trades</h6>
-                                                                                <h4 class="text-warning" id="today-trades">0</h4>
-                                                                                <small class="text-muted">Trades today</small>
-                                                                            </div>
-                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    <!-- Summary Row -->
+                                                                    <div class="row mt-3">
+                                                                        <div class="col-12">
+                                                                            <div class="card border-success">
+                                                                                <div class="card-header bg-success text-white">
+                                                                                    <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>Overall Summary</h6>
+                                                                                </div>
+                                                                                <div class="card-body">
+                                                                                    <div class="row">
+                                                                                        <div class="col-md-3">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Total Positions</h6>
+                                                                                                <h4 class="text-success" id="total-positions">0</h4>
+                                                                                                <small class="text-muted">Active positions</small>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-md-3">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Today's Trades</h6>
+                                                                                                <h4 class="text-warning" id="today-trades">0</h4>
+                                                                                                <small class="text-muted">Trades today</small>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-md-3">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Total Transaction Value</h6>
+                                                                                                <h4 class="text-primary" id="total-transaction-value">$0.00</h4>
+                                                                                                <small class="text-muted">Combined portfolio value</small>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                        <div class="col-md-3">
+                                                                                            <div class="text-center">
+                                                                                                <h6 class="text-muted">Combined P&L</h6>
+                                                                                                <h4 class="text-success" id="combined-pnl">$0.00</h4>
+                                                                                                <small class="text-muted">Total profit/loss</small>
+                                                                                            </div>
+                                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
                                                     </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                                 </div>
                                             </div>
                                         </div>

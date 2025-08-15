@@ -2699,12 +2699,37 @@ class DashboardApp:
         """Update dashboard data periodically."""
         while self.is_running:
             try:
-                # Get current portfolio data
-                current_prices = self._get_current_prices()
-                portfolio_data = self.portfolio_manager.get_portfolio_summary(current_prices)
-                
-                # Emit to connected clients
-                self.socketio.emit('portfolio_update', portfolio_data)
+                # Get current portfolio data for all portfolios
+                try:
+                    portfolios = self.portfolio_manager.db.get_all_portfolios()
+                    portfolio_data = []
+                    
+                    for portfolio in portfolios:
+                        try:
+                            summary = self.portfolio_manager.get_portfolio_summary(portfolio.id)
+                            if summary:
+                                portfolio_data.append({
+                                    'id': portfolio.id,
+                                    'name': portfolio.name,
+                                    'type': portfolio.portfolio_type.value,
+                                    'summary': {
+                                        'total_value': summary.total_value,
+                                        'total_pnl': summary.total_pnl,
+                                        'total_pnl_pct': summary.total_pnl_pct,
+                                        'positions_count': summary.positions_count,
+                                        'cash': summary.cash,
+                                        'positions_value': summary.positions_value
+                                    }
+                                })
+                        except Exception as e:
+                            self.logger.warning(f"Error getting summary for portfolio {portfolio.id}: {e}")
+                            continue
+                    
+                    # Emit to connected clients
+                    self.socketio.emit('portfolio_update', portfolio_data)
+                    
+                except Exception as e:
+                    self.logger.error(f"Error getting portfolio data: {e}")
                 
                 # Get trading status
                 trading_status = {

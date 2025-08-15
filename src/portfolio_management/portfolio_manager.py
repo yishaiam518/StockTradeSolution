@@ -251,9 +251,26 @@ class PortfolioManager:
             total_pnl = total_value - portfolio.initial_cash
             total_pnl_pct = (total_pnl / portfolio.initial_cash) * 100 if portfolio.initial_cash > 0 else 0
             
-            # Find best and worst positions
-            best_position = max(positions, key=lambda p: p.pnl_pct) if positions else None
-            worst_position = min(positions, key=lambda p: p.pnl_pct) if positions else None
+            # Find best and worst positions by calculating P&L dynamically
+            if positions:
+                # Calculate P&L for each position
+                for pos in positions:
+                    # Calculate current position value
+                    current_price = pos.current_price
+                    position_value = pos.shares * current_price
+                    position_cost = pos.shares * pos.avg_price
+                    position_pnl = position_value - position_cost
+                    position_pnl_pct = (position_pnl / position_cost) * 100 if position_cost > 0 else 0
+                    
+                    # Add these as attributes to the position object
+                    pos.pnl = position_pnl
+                    pos.pnl_pct = position_pnl_pct
+                
+                best_position = max(positions, key=lambda p: p.pnl_pct)
+                worst_position = min(positions, key=lambda p: p.pnl_pct)
+            else:
+                best_position = None
+                worst_position = None
             
             return PortfolioSummary(
                 portfolio_id=portfolio.id,
@@ -400,13 +417,19 @@ class PortfolioManager:
             portfolio.settings['risk_level'] = settings.risk_level.value
             
             # Update portfolio in database
+            # Calculate new current cash (should never go below safe net)
+            new_current_cash = portfolio.current_cash - total_cost
+            if new_current_cash < settings.safe_net:
+                self.logger.warning(f"Adjusting current cash to respect safe net. Calculated: ${new_current_cash:.2f}, Safe net: ${settings.safe_net:.2f}")
+                new_current_cash = settings.safe_net
+            
             with sqlite3.connect(self.db.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute("""
                     UPDATE portfolios 
                     SET current_cash = ?, settings = ?, updated_at = CURRENT_TIMESTAMP
                     WHERE id = ?
-                """, (portfolio.current_cash - total_cost, json.dumps(portfolio.settings), portfolio_id))
+                """, (new_current_cash, json.dumps(portfolio.settings), portfolio_id))
                 conn.commit()
             
             self.logger.info(f"Successfully bought {shares} shares of {symbol} at ${price:.2f}. Available cash for trading: ${settings.available_cash_for_trading:.2f}")

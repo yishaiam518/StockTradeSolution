@@ -5,7 +5,7 @@ from typing import Dict, List, Optional
 import sqlite3
 import json
 
-from ..portfolio_management.portfolio_manager import PortfolioManager
+from ..portfolio_management.portfolio_manager import PortfolioManager, PortfolioSettings, RiskLevel
 from ..portfolio_management.portfolio_database import PortfolioType, TransactionType
 from ..data_collection.data_manager import DataCollectionManager as DataManager
 from ..ai_ranking.hybrid_ranking_engine import HybridRankingEngine
@@ -13,21 +13,66 @@ from ..ai_ranking.hybrid_ranking_engine import HybridRankingEngine
 # Create Blueprint
 portfolio_api = Blueprint('portfolio_api', __name__)
 
-# Initialize components
-data_manager = DataManager()
-hybrid_ranking_engine = HybridRankingEngine(data_manager)
-portfolio_manager = PortfolioManager(data_manager, hybrid_ranking_engine)
+# Initialize components lazily
+_data_manager = None
+_portfolio_manager = None
+
+def get_portfolio_manager():
+    """Get or create portfolio manager instance."""
+    global _data_manager, _portfolio_manager
+    if _portfolio_manager is None:
+        try:
+            _data_manager = DataManager()
+            _portfolio_manager = PortfolioManager(_data_manager)
+        except Exception as e:
+            logging.error(f"Error initializing portfolio manager: {e}")
+            raise
+    return _portfolio_manager
 
 @portfolio_api.route('/portfolios', methods=['GET', 'POST'])
 def portfolios():
     """Get all portfolios or create a new portfolio."""
     if request.method == 'GET':
         try:
+            portfolio_manager = get_portfolio_manager()
             portfolios = portfolio_manager.db.get_all_portfolios()
             
             portfolio_data = []
             for portfolio in portfolios:
-                summary = portfolio_manager.get_portfolio_summary(portfolio.id)
+                # Calculate summary directly instead of relying on portfolio manager
+                try:
+                    logging.info(f"Calculating summary for portfolio {portfolio.id}: {portfolio.name}")
+                    positions = portfolio_manager.db.get_portfolio_positions(portfolio.id)
+                    logging.info(f"Retrieved {len(positions)} positions for portfolio {portfolio.id}")
+                    
+                    positions_value = sum(pos.shares * pos.current_price for pos in positions)
+                    total_value = portfolio.current_cash + positions_value
+                    total_pnl = total_value - portfolio.initial_cash
+                    total_pnl_pct = (total_pnl / portfolio.initial_cash) * 100 if portfolio.initial_cash > 0 else 0
+                    
+                    summary = {
+                        'total_value': float(total_value),
+                        'total_pnl': float(total_pnl),
+                        'total_pnl_pct': float(total_pnl_pct),
+                        'positions_count': int(len(positions)),
+                        'cash': float(portfolio.current_cash),
+                        'positions_value': float(positions_value)
+                    }
+                    logging.info(f"Summary calculated for portfolio {portfolio.id}: {summary}")
+                except Exception as e:
+                    logging.error(f"Error calculating summary for portfolio {portfolio.id}: {e}")
+                    import traceback
+                    logging.error(traceback.format_exc())
+                    summary = {
+                        'total_value': 0,
+                        'total_pnl': 0,
+                        'total_pnl_pct': 0,
+                        'positions_count': 0,
+                        'cash': portfolio.current_cash,
+                        'positions_value': 0
+                    }
+                
+                logging.info(f"Adding portfolio {portfolio.id} to response with summary: {summary}")
                 portfolio_data.append({
                     'id': portfolio.id,
                     'name': portfolio.name,
@@ -37,15 +82,9 @@ def portfolios():
                     'created_at': portfolio.created_at.isoformat(),
                     'updated_at': portfolio.updated_at.isoformat(),
                     'settings': portfolio.settings,
-                    'summary': {
-                        'total_value': summary.total_value if summary else 0,
-                        'total_pnl': summary.total_pnl if summary else 0,
-                        'total_pnl_pct': summary.total_pnl_pct if summary else 0,
-                        'positions_count': summary.positions_count if summary else 0,
-                        'cash': summary.cash if summary else 0,
-                        'positions_value': summary.positions_value if summary else 0
-                    } if summary else None
+                    'summary': summary
                 })
+
             
             return jsonify({
                 'success': True,
@@ -79,7 +118,6 @@ def portfolios():
                 portfolio_type_enum = PortfolioType.USER_MANAGED
             
             # Create default settings for the new portfolio
-            from src.portfolio_management.portfolio_manager import PortfolioSettings, RiskLevel
             
             if portfolio_type == 'ai_managed':
                 default_settings = PortfolioSettings(
@@ -116,6 +154,7 @@ def portfolios():
             settings_dict = default_settings.__dict__.copy()
             settings_dict['risk_level'] = default_settings.risk_level.value
             
+            portfolio_manager = get_portfolio_manager()
             # Create portfolio
             portfolio_id = portfolio_manager.db.create_portfolio(
                 name=name,
@@ -141,6 +180,7 @@ def portfolios():
 def get_portfolio(portfolio_id: int):
     """Get specific portfolio details."""
     try:
+        portfolio_manager = get_portfolio_manager()
         portfolio = portfolio_manager.db.get_portfolio(portfolio_id)
         if not portfolio:
             return jsonify({
@@ -148,8 +188,48 @@ def get_portfolio(portfolio_id: int):
                 'error': 'Portfolio not found'
             }), 404
         
-        summary = portfolio_manager.get_portfolio_summary(portfolio_id)
+        # Calculate summary directly instead of relying on portfolio manager
+        try:
+            logging.info(f"Calculating summary for portfolio {portfolio_id}: {portfolio.name}")
+            positions = portfolio_manager.db.get_portfolio_positions(portfolio_id)
+            logging.info(f"Retrieved {len(positions)} positions for portfolio {portfolio_id}")
+            
+            positions_value = sum(pos.shares * pos.current_price for pos in positions)
+            total_value = portfolio.current_cash + positions_value
+            total_pnl = total_value - portfolio.initial_cash
+            total_pnl_pct = (total_pnl / portfolio.initial_cash) * 100 if portfolio.initial_cash > 0 else 0
+            
+            summary = {
+                'total_value': total_value,
+                'total_pnl': total_pnl,
+                'total_pnl_pct': total_pnl_pct,
+                'positions_count': len(positions),
+                'cash': portfolio.current_cash,
+                'positions_value': positions_value
+            }
+            logging.info(f"Summary calculated successfully for portfolio {portfolio_id}: {summary}")
+        except Exception as e:
+            logging.error(f"Error calculating summary for portfolio {portfolio_id}: {e}")
+            import traceback
+            logging.error(traceback.format_exc())
+            summary = {
+                'total_value': 0,
+                'total_pnl': 0,
+                'total_pnl_pct': 0,
+                'positions_count': 0,
+                'cash': portfolio.current_cash,
+                'positions_value': 0
+            }
+            
+        # Get positions with calculated P&L from the portfolio manager
         positions = portfolio_manager.db.get_portfolio_positions(portfolio_id)
+        # Calculate P&L for each position (same logic as portfolio manager)
+        for pos in positions:
+            position_value = pos.shares * pos.current_price
+            position_cost = pos.shares * pos.avg_price
+            pos.pnl = position_value - position_cost
+            pos.pnl_pct = (pos.pnl / position_cost) * 100 if position_cost > 0 else 0
+            
         transactions = portfolio_manager.db.get_portfolio_transactions(portfolio_id, limit=50)
         
         return jsonify({
@@ -165,20 +245,14 @@ def get_portfolio(portfolio_id: int):
                 'settings': portfolio.settings
             },
             'summary': {
-                'total_value': summary.total_value if summary else 0,
-                'total_pnl': summary.total_pnl if summary else 0,
-                'total_pnl_pct': summary.total_pnl_pct if summary else 0,
-                'positions_count': summary.positions_count if summary else 0,
-                'cash': summary.cash if summary else 0,
-                'positions_value': summary.positions_value if summary else 0,
-                'best_position': {
-                    'symbol': summary.best_position.symbol,
-                    'pnl_pct': summary.best_position.pnl_pct
-                } if summary and summary.best_position else None,
-                'worst_position': {
-                    'symbol': summary.worst_position.symbol,
-                    'pnl_pct': summary.worst_position.pnl_pct
-                } if summary and summary.worst_position else None
+                'total_value': summary['total_value'] if summary else 0,
+                'total_pnl': summary['total_pnl'] if summary else 0,
+                'total_pnl_pct': summary['total_pnl_pct'] if summary else 0,
+                'positions_count': summary['positions_count'] if summary else 0,
+                'cash': summary['cash'] if summary else 0,
+                'positions_value': summary['positions_value'] if summary else 0,
+                'best_position': None,  # Not calculating best/worst positions for now
+                'worst_position': None
             } if summary else None,
             'positions': [
                 {
@@ -187,8 +261,8 @@ def get_portfolio(portfolio_id: int):
                     'shares': pos.shares,
                     'avg_price': pos.avg_price,
                     'current_price': pos.current_price,
-                    'pnl': pos.pnl,
-                    'pnl_pct': pos.pnl_pct,
+                    'pnl': (pos.shares * pos.current_price) - (pos.shares * pos.avg_price),
+                    'pnl_pct': ((pos.shares * pos.current_price) - (pos.shares * pos.avg_price)) / (pos.shares * pos.avg_price) * 100 if pos.shares * pos.avg_price > 0 else 0,
                     'value': pos.shares * pos.current_price,
                     'created_at': pos.created_at.isoformat(),
                     'updated_at': pos.updated_at.isoformat()
@@ -203,7 +277,7 @@ def get_portfolio(portfolio_id: int):
                     'shares': trans.shares,
                     'price': trans.price,
                     'total_amount': trans.total_amount,
-                    'pnl': trans.pnl,
+                    'pnl': 0,  # Transactions don't have P&L - they're just records
                     'timestamp': trans.timestamp.isoformat(),
                     'notes': trans.notes
                 }
@@ -489,7 +563,7 @@ def get_portfolio_transactions(portfolio_id: int):
                     'shares': trans.shares,
                     'price': trans.price,
                     'total_amount': trans.total_amount,
-                    'pnl': trans.pnl,
+                    'pnl': 0,  # Transactions don't have P&L - they're just records
                     'timestamp': trans.timestamp.isoformat(),
                     'notes': trans.notes
                 }
@@ -519,8 +593,8 @@ def get_portfolio_positions(portfolio_id: int):
                     'shares': pos.shares,
                     'avg_price': pos.avg_price,
                     'current_price': pos.current_price,
-                    'pnl': pos.pnl,
-                    'pnl_pct': pos.pnl_pct,
+                    'pnl': (pos.shares * pos.current_price) - (pos.shares * pos.avg_price),
+                    'pnl_pct': ((pos.shares * pos.current_price) - (pos.shares * pos.avg_price)) / (pos.shares * pos.avg_price) * 100 if pos.shares * pos.avg_price > 0 else 0,
                     'value': pos.shares * pos.current_price,
                     'created_at': pos.created_at.isoformat(),
                     'updated_at': pos.updated_at.isoformat()

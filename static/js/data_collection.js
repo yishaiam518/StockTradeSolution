@@ -4329,22 +4329,37 @@ class DataCollectionManager {
             
             if (data.success && data.portfolios.length > 0) {
                 // Update portfolio summary display
-                const userPortfolio = data.portfolios.find(p => p.type === 'USER');
-                const aiPortfolio = data.portfolios.find(p => p.type === 'AI');
+                const userPortfolio = data.portfolios.find(p => p.type === 'user_managed');
+                const aiPortfolio = data.portfolios.find(p => p.type === 'ai_managed');
                 
                 if (userPortfolio) {
+                    // User Portfolio Details
+                    document.getElementById('user-portfolio-cash').textContent = `$${userPortfolio.summary?.cash?.toFixed(2) || '0.00'}`;
                     document.getElementById('user-portfolio-value').textContent = `$${userPortfolio.summary?.total_value?.toFixed(2) || '0.00'}`;
-                    document.getElementById('user-portfolio-pnl').textContent = `P&L: $${userPortfolio.summary?.total_pnl?.toFixed(2) || '0.00'} (${userPortfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%)`;
+                    document.getElementById('user-portfolio-pnl-pct').textContent = `${userPortfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%`;
+                    document.getElementById('user-portfolio-pnl-value').textContent = `$${userPortfolio.summary?.total_pnl?.toFixed(2) || '0.00'}`;
+                    document.getElementById('user-portfolio-positions').textContent = userPortfolio.summary?.positions_count || '0';
+                    document.getElementById('user-portfolio-transaction-value').textContent = `$${userPortfolio.summary?.positions_value?.toFixed(2) || '0.00'}`;
                 }
                 
                 if (aiPortfolio) {
+                    // AI Portfolio Details
+                    document.getElementById('ai-portfolio-cash').textContent = `$${aiPortfolio.summary?.cash?.toFixed(2) || '0.00'}`;
                     document.getElementById('ai-portfolio-value').textContent = `$${aiPortfolio.summary?.total_value?.toFixed(2) || '0.00'}`;
-                    document.getElementById('ai-portfolio-pnl').textContent = `P&L: $${aiPortfolio.summary?.total_pnl?.toFixed(2) || '0.00'} (${aiPortfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%)`;
+                    document.getElementById('ai-portfolio-pnl-pct').textContent = `${aiPortfolio.summary?.total_pnl_pct?.toFixed(2) || '0.00'}%`;
+                    document.getElementById('ai-portfolio-pnl-value').textContent = `$${aiPortfolio.summary?.total_pnl?.toFixed(2) || '0.00'}`;
+                    document.getElementById('ai-portfolio-positions').textContent = aiPortfolio.summary?.positions_count || '0';
+                    document.getElementById('ai-portfolio-transaction-value').textContent = `$${aiPortfolio.summary?.positions_value?.toFixed(2) || '0.00'}`;
                 }
                 
-                // Update total positions and today's trades
+                // Update overall summary
                 const totalPositions = (userPortfolio?.summary?.positions_count || 0) + (aiPortfolio?.summary?.positions_count || 0);
+                const totalTransactionValue = (userPortfolio?.summary?.positions_value || 0) + (aiPortfolio?.summary?.positions_value || 0);
+                const combinedPnl = (userPortfolio?.summary?.total_pnl || 0) + (aiPortfolio?.summary?.total_pnl || 0);
+                
                 document.getElementById('total-positions').textContent = totalPositions;
+                document.getElementById('total-transaction-value').textContent = `$${totalTransactionValue.toFixed(2)}`;
+                document.getElementById('combined-pnl').textContent = `$${combinedPnl.toFixed(2)}`;
                 
                 // For now, set today's trades to 0 (could be enhanced later)
                 document.getElementById('today-trades').textContent = '0';

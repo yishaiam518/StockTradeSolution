@@ -33,8 +33,6 @@ class Position:
     shares: float
     avg_price: float
     current_price: float
-    pnl: float
-    pnl_pct: float
     created_at: datetime
     updated_at: datetime
 
@@ -47,7 +45,6 @@ class Transaction:
     shares: float
     price: float
     total_amount: float
-    pnl: Optional[float]
     timestamp: datetime
     notes: Optional[str]
 
@@ -97,8 +94,6 @@ class PortfolioDatabase:
                         shares REAL NOT NULL,
                         avg_price REAL NOT NULL,
                         current_price REAL NOT NULL,
-                        pnl REAL DEFAULT 0,
-                        pnl_pct REAL DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (portfolio_id) REFERENCES portfolios (id),
@@ -116,7 +111,6 @@ class PortfolioDatabase:
                         shares REAL NOT NULL,
                         price REAL NOT NULL,
                         total_amount REAL NOT NULL,
-                        pnl REAL,
                         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         notes TEXT,
                         FOREIGN KEY (portfolio_id) REFERENCES portfolios (id)
@@ -267,14 +261,14 @@ class PortfolioDatabase:
                     result = cursor.fetchone()
                     if result:
                         avg_price = result[0]
-                        pnl = (price - avg_price) * shares
+                        # Note: P&L is calculated dynamically, not stored
                 
                 cursor.execute("""
                     INSERT INTO portfolio_transactions 
-                    (portfolio_id, symbol, transaction_type, shares, price, total_amount, pnl, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (portfolio_id, symbol, transaction_type, shares, price, total_amount, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                 """, (portfolio_id, symbol, transaction_type.value, shares, price, 
-                     total_amount, pnl, notes))
+                     total_amount, notes))
                 
                 transaction_id = cursor.lastrowid
                 
@@ -328,29 +322,48 @@ class PortfolioDatabase:
                     else:
                         # Update position
                         new_avg_price = ((current_shares * current_avg_price) + (shares * price)) / new_shares
-                        pnl = (price - new_avg_price) * new_shares
-                        pnl_pct = ((price - new_avg_price) / new_avg_price) * 100 if new_avg_price > 0 else 0
                         
                         cursor.execute("""
                             UPDATE portfolio_positions 
-                            SET shares = ?, avg_price = ?, current_price = ?, pnl = ?, pnl_pct = ?, updated_at = CURRENT_TIMESTAMP
+                            SET shares = ?, avg_price = ?, current_price = ?, updated_at = CURRENT_TIMESTAMP
                             WHERE portfolio_id = ? AND symbol = ?
-                        """, (new_shares, new_avg_price, price, pnl, pnl_pct, portfolio_id, symbol))
+                        """, (new_shares, new_avg_price, price, portfolio_id, symbol))
                 else:
                     # Create new position
-                    pnl = 0
-                    pnl_pct = 0
                     
                     cursor.execute("""
                         INSERT INTO portfolio_positions 
-                        (portfolio_id, symbol, shares, avg_price, current_price, pnl, pnl_pct)
-                        VALUES (?, ?, ?, ?, ?, ?, ?)
-                    """, (portfolio_id, symbol, shares, price, price, pnl, pnl_pct))
+                        (portfolio_id, symbol, shares, avg_price, current_price)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (portfolio_id, symbol, shares, price, price))
                 
                 conn.commit()
                 
         except Exception as e:
             self.logger.error(f"Error updating position: {e}")
+            raise
+    
+    def update_position_current_price(self, portfolio_id: int, symbol: str, current_price: float) -> None:
+        """Update only the current price of a position without affecting shares or avg_price."""
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    UPDATE portfolio_positions 
+                    SET current_price = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE portfolio_id = ? AND symbol = ?
+                """, (current_price, portfolio_id, symbol))
+                
+                if cursor.rowcount == 0:
+                    self.logger.warning(f"No position found to update: portfolio {portfolio_id}, symbol {symbol}")
+                else:
+                    self.logger.info(f"Updated current price for {symbol} to ${current_price:.2f}")
+                
+                conn.commit()
+                
+        except Exception as e:
+            self.logger.error(f"Error updating position current price: {e}")
             raise
     
     def get_portfolio_positions(self, portfolio_id: int) -> List[Position]:
@@ -361,7 +374,7 @@ class PortfolioDatabase:
                 
                 cursor.execute("""
                     SELECT id, portfolio_id, symbol, shares, avg_price, current_price, 
-                           pnl, pnl_pct, created_at, updated_at
+                           created_at, updated_at
                     FROM portfolio_positions 
                     WHERE portfolio_id = ?
                     ORDER BY symbol
@@ -376,10 +389,8 @@ class PortfolioDatabase:
                         shares=row[3],
                         avg_price=row[4],
                         current_price=row[5],
-                        pnl=row[6],
-                        pnl_pct=row[7],
-                        created_at=datetime.fromisoformat(row[8]),
-                        updated_at=datetime.fromisoformat(row[9])
+                        created_at=datetime.fromisoformat(row[6]),
+                        updated_at=datetime.fromisoformat(row[7])
                     ))
                 
                 return positions
@@ -397,7 +408,7 @@ class PortfolioDatabase:
                 
                 cursor.execute("""
                     SELECT id, portfolio_id, symbol, transaction_type, shares, price, 
-                           total_amount, pnl, timestamp, notes
+                           total_amount, timestamp, notes
                     FROM portfolio_transactions 
                     WHERE portfolio_id = ?
                     ORDER BY timestamp DESC
@@ -414,9 +425,8 @@ class PortfolioDatabase:
                         shares=row[4],
                         price=row[5],
                         total_amount=row[6],
-                        pnl=row[7],
-                        timestamp=datetime.fromisoformat(row[8]),
-                        notes=row[9]
+                        timestamp=datetime.fromisoformat(row[7]),
+                        notes=row[8]
                     ))
                 
                 return transactions
