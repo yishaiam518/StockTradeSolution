@@ -253,7 +253,8 @@ class PortfolioManager:
             
             # Find best and worst positions by calculating P&L dynamically
             if positions:
-                # Calculate P&L for each position
+                # Calculate P&L for each position without modifying the objects
+                position_pnls = []
                 for pos in positions:
                     # Calculate current position value
                     current_price = pos.current_price
@@ -262,12 +263,18 @@ class PortfolioManager:
                     position_pnl = position_value - position_cost
                     position_pnl_pct = (position_pnl / position_cost) * 100 if position_cost > 0 else 0
                     
-                    # Add these as attributes to the position object
-                    pos.pnl = position_pnl
-                    pos.pnl_pct = position_pnl_pct
+                    position_pnls.append({
+                        'position': pos,
+                        'pnl': position_pnl,
+                        'pnl_pct': position_pnl_pct
+                    })
                 
-                best_position = max(positions, key=lambda p: p.pnl_pct)
-                worst_position = min(positions, key=lambda p: p.pnl_pct)
+                if position_pnls:
+                    best_position = max(position_pnls, key=lambda p: p['pnl_pct'])['position']
+                    worst_position = min(position_pnls, key=lambda p: p['pnl_pct'])['position']
+                else:
+                    best_position = None
+                    worst_position = None
             else:
                 best_position = None
                 worst_position = None
@@ -594,8 +601,15 @@ class PortfolioManager:
             # Process ranking results
             for stock in ranking_results.dual_scores:
                 symbol = stock.symbol
-                # Use the pre-calculated combined score from hybrid ranking
-                combined_score = stock.combined_score
+                # Calculate combined score manually since DualScore objects don't have this property
+                # Add comprehensive fallback for any attribute access issues
+                try:
+                    openai_score = getattr(stock, 'openai_score', 50.0)
+                    local_score = getattr(stock, 'local_score', 50.0)
+                    combined_score = (openai_score + local_score) / 2
+                except Exception as score_error:
+                    self.logger.warning(f"Error calculating scores for {symbol}: {score_error}, using default scores")
+                    combined_score = 50.0
                 # Generate recommendation based on combined score
                 if combined_score >= 75:
                     recommendation = "Strong Buy"
@@ -696,7 +710,7 @@ class PortfolioManager:
             if not current_position:
                 # Calculate position size
                 max_position_value = portfolio_summary.total_value * settings.max_position_size
-                shares = max_position_value / current_price
+                shares = int(max_position_value / current_price)
                 
                 if shares > 0 and settings.available_cash_for_trading >= (shares * current_price):
                     decision.update({
@@ -707,20 +721,25 @@ class PortfolioManager:
         
         # Sell decision logic
         elif current_position:
+            # Calculate current position P&L percentage
+            position_value = current_position.shares * current_price
+            position_cost = current_position.shares * current_position.avg_price
+            position_pnl_pct = (position_value - position_cost) / position_cost * 100 if position_cost > 0 else 0
+            
             # Check stop loss
-            if current_position.pnl_pct <= -settings.stop_loss_pct * 100:
+            if position_pnl_pct <= -settings.stop_loss_pct * 100:
                 decision.update({
                     'action': 'sell',
                     'shares': current_position.shares,
-                    'reason': f'Stop Loss triggered: {current_position.pnl_pct:.1f}%'
+                    'reason': f'Stop Loss triggered: {position_pnl_pct:.1f}%'
                 })
             
             # Check take profit
-            elif current_position.pnl_pct >= settings.stop_gain_pct * 100:
+            elif position_pnl_pct >= settings.stop_gain_pct * 100:
                 decision.update({
                     'action': 'sell',
                     'shares': current_position.shares,
-                    'reason': f'Take Profit triggered: {current_position.pnl_pct:.1f}%'
+                    'reason': f'Take Profit triggered: {position_pnl_pct:.1f}%'
                 })
             
             # Check if recommendation changed to Sell

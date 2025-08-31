@@ -3986,6 +3986,7 @@ class DataCollectionManager {
                     action: String(t.type).toUpperCase(),
                     shares: Number(t.shares),
                     price: Number(t.price),
+                    currentPrice: current,
                     total: Number(t.total_amount),
                     pnl: pnl,
                     pnlPct: pnlPct,
@@ -4025,6 +4026,7 @@ class DataCollectionManager {
                     { field: 'action', headerText: 'Action', width: 90, template: actionTpl, textAlign: 'Center' },
                     { field: 'shares', headerText: 'Qty', width: 100, textAlign: 'Right', format: 'N2' },
                     { field: 'price', headerText: 'Price', width: 120, textAlign: 'Right', template: currencyTpl },
+                    { field: 'currentPrice', headerText: 'Current', width: 120, textAlign: 'Right', template: currencyTpl },
                     { field: 'total', headerText: 'Total', width: 140, textAlign: 'Right', template: currencyTpl },
                     { field: 'pnl', headerText: 'P&L', width: 140, textAlign: 'Right', template: pnlTpl },
                     { field: 'pnlPct', headerText: 'P&L %', width: 120, textAlign: 'Right', template: pnlPctTpl },
@@ -4329,8 +4331,8 @@ class DataCollectionManager {
             
             if (data.success && data.portfolios.length > 0) {
                 // Update portfolio summary display
-                const userPortfolio = data.portfolios.find(p => p.type === 'user_managed');
-                const aiPortfolio = data.portfolios.find(p => p.type === 'ai_managed');
+                const userPortfolio = data.portfolios.find(p => p.type === 'user_managed' && p.name === 'User Portfolio');
+                const aiPortfolio = data.portfolios.find(p => p.type === 'ai_managed' && p.name === 'AI Portfolio');
                 
                 if (userPortfolio) {
                     // User Portfolio Details

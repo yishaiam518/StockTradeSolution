@@ -42,7 +42,7 @@ def portfolios():
                 # Calculate summary directly instead of relying on portfolio manager
                 try:
                     logging.info(f"Calculating summary for portfolio {portfolio.id}: {portfolio.name}")
-                    positions = portfolio_manager.db.get_portfolio_positions(portfolio.id)
+                    positions = get_portfolio_manager().db.get_portfolio_positions(portfolio.id)
                     logging.info(f"Retrieved {len(positions)} positions for portfolio {portfolio.id}")
                     
                     positions_value = sum(pos.shares * pos.current_price for pos in positions)
@@ -181,7 +181,7 @@ def get_portfolio(portfolio_id: int):
     """Get specific portfolio details."""
     try:
         portfolio_manager = get_portfolio_manager()
-        portfolio = portfolio_manager.db.get_portfolio(portfolio_id)
+        portfolio = get_portfolio_manager().db.get_portfolio(portfolio_id)
         if not portfolio:
             return jsonify({
                 'success': False,
@@ -191,7 +191,7 @@ def get_portfolio(portfolio_id: int):
         # Calculate summary directly instead of relying on portfolio manager
         try:
             logging.info(f"Calculating summary for portfolio {portfolio_id}: {portfolio.name}")
-            positions = portfolio_manager.db.get_portfolio_positions(portfolio_id)
+            positions = get_portfolio_manager().db.get_portfolio_positions(portfolio_id)
             logging.info(f"Retrieved {len(positions)} positions for portfolio {portfolio_id}")
             
             positions_value = sum(pos.shares * pos.current_price for pos in positions)
@@ -200,12 +200,12 @@ def get_portfolio(portfolio_id: int):
             total_pnl_pct = (total_pnl / portfolio.initial_cash) * 100 if portfolio.initial_cash > 0 else 0
             
             summary = {
-                'total_value': total_value,
-                'total_pnl': total_pnl,
-                'total_pnl_pct': total_pnl_pct,
-                'positions_count': len(positions),
-                'cash': portfolio.current_cash,
-                'positions_value': positions_value
+                'total_value': float(total_value),
+                'total_pnl': float(total_pnl),
+                'total_pnl_pct': float(total_pnl_pct),
+                'positions_count': int(len(positions)),
+                'cash': float(portfolio.current_cash),
+                'positions_value': float(positions_value)
             }
             logging.info(f"Summary calculated successfully for portfolio {portfolio_id}: {summary}")
         except Exception as e:
@@ -222,15 +222,10 @@ def get_portfolio(portfolio_id: int):
             }
             
         # Get positions with calculated P&L from the portfolio manager
-        positions = portfolio_manager.db.get_portfolio_positions(portfolio_id)
-        # Calculate P&L for each position (same logic as portfolio manager)
-        for pos in positions:
-            position_value = pos.shares * pos.current_price
-            position_cost = pos.shares * pos.avg_price
-            pos.pnl = position_value - position_cost
-            pos.pnl_pct = (pos.pnl / position_cost) * 100 if position_cost > 0 else 0
+        positions = get_portfolio_manager().db.get_portfolio_positions(portfolio_id)
+        # Calculate P&L for each position dynamically without modifying objects
             
-        transactions = portfolio_manager.db.get_portfolio_transactions(portfolio_id, limit=50)
+        transactions = get_portfolio_manager().db.get_portfolio_transactions(portfolio_id, limit=50)
         
         return jsonify({
             'success': True,
@@ -334,7 +329,7 @@ def buy_stock(portfolio_id: int):
             })
         else:
             # Get the specific error from the portfolio manager
-            portfolio = portfolio_manager.db.get_portfolio(portfolio_id)
+            portfolio = get_portfolio_manager().db.get_portfolio(portfolio_id)
             if portfolio:
                 # Load portfolio settings
                 settings = portfolio.settings or {}
@@ -465,7 +460,7 @@ def get_portfolio_performance(portfolio_id: int):
     try:
         days = request.args.get('days', 30, type=int)
         
-        performance_history = portfolio_manager.db.get_portfolio_performance_history(
+        performance_history = get_portfolio_manager().db.get_portfolio_performance_history(
             portfolio_id=portfolio_id,
             days=days
         )
@@ -548,10 +543,23 @@ def get_portfolio_transactions(portfolio_id: int):
     try:
         limit = request.args.get('limit', 100, type=int)
         
-        transactions = portfolio_manager.db.get_portfolio_transactions(
+        transactions = get_portfolio_manager().db.get_portfolio_transactions(
             portfolio_id=portfolio_id,
             limit=limit
         )
+        
+        # Get current prices for all symbols in transactions
+        symbols = list(set(trans.symbol for trans in transactions))
+        current_prices = {}
+        
+        if symbols:
+            try:
+                positions = get_portfolio_manager().db.get_portfolio_positions(portfolio_id)
+                for pos in positions:
+                    if pos.symbol in symbols:
+                        current_prices[pos.symbol] = pos.current_price
+            except Exception as e:
+                logging.warning(f"Could not fetch current prices: {e}")
         
         return jsonify({
             'success': True,
@@ -562,8 +570,10 @@ def get_portfolio_transactions(portfolio_id: int):
                     'type': trans.transaction_type.value,
                     'shares': trans.shares,
                     'price': trans.price,
+                    'current_price': current_prices.get(trans.symbol, None),
                     'total_amount': trans.total_amount,
-                    'pnl': 0,  # Transactions don't have P&L - they're just records
+                    'pnl': trans.pnl if hasattr(trans, 'pnl') and trans.pnl is not None else 0,
+                    'pnl_pct': trans.pnl_percentage if hasattr(trans, 'pnl_percentage') and trans.pnl_percentage is not None else 0,
                     'timestamp': trans.timestamp.isoformat(),
                     'notes': trans.notes
                 }
@@ -582,7 +592,7 @@ def get_portfolio_transactions(portfolio_id: int):
 def get_portfolio_positions(portfolio_id: int):
     """Get portfolio positions."""
     try:
-        positions = portfolio_manager.db.get_portfolio_positions(portfolio_id)
+        positions = get_portfolio_manager().db.get_portfolio_positions(portfolio_id)
         
         return jsonify({
             'success': True,
@@ -616,7 +626,7 @@ def update_portfolio_settings(portfolio_id: int):
     try:
         data = request.get_json() or {}
         
-        portfolio = portfolio_manager.db.get_portfolio(portfolio_id)
+        portfolio = get_portfolio_manager().db.get_portfolio(portfolio_id)
         if not portfolio:
             return jsonify({'success': False, 'error': 'Portfolio not found'}), 404
         

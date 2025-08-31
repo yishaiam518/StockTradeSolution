@@ -45,8 +45,10 @@ class Transaction:
     shares: float
     price: float
     total_amount: float
-    timestamp: datetime
-    notes: Optional[str]
+    pnl: Optional[float] = None
+    pnl_percentage: Optional[float] = None
+    timestamp: datetime = None
+    notes: Optional[str] = None
 
 @dataclass
 class DailyPerformance:
@@ -251,6 +253,7 @@ class PortfolioDatabase:
                 
                 # Calculate P&L for sell transactions
                 pnl = None
+                pnl_percentage = None
                 if transaction_type == TransactionType.SELL:
                     # Get average buy price for this symbol
                     cursor.execute("""
@@ -261,14 +264,16 @@ class PortfolioDatabase:
                     result = cursor.fetchone()
                     if result:
                         avg_price = result[0]
-                        # Note: P&L is calculated dynamically, not stored
+                        # Calculate P&L: (Sell Price - Buy Price) × Shares
+                        pnl = (price - avg_price) * shares
+                        pnl_percentage = (pnl / (avg_price * shares)) * 100 if avg_price > 0 else 0
                 
                 cursor.execute("""
                     INSERT INTO portfolio_transactions 
-                    (portfolio_id, symbol, transaction_type, shares, price, total_amount, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (portfolio_id, symbol, transaction_type, shares, price, total_amount, pnl, pnl_percentage, notes)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (portfolio_id, symbol, transaction_type.value, shares, price, 
-                     total_amount, notes))
+                     total_amount, pnl, pnl_percentage, notes))
                 
                 transaction_id = cursor.lastrowid
                 
@@ -408,7 +413,7 @@ class PortfolioDatabase:
                 
                 cursor.execute("""
                     SELECT id, portfolio_id, symbol, transaction_type, shares, price, 
-                           total_amount, timestamp, notes
+                           total_amount, pnl, pnl_percentage, timestamp, notes
                     FROM portfolio_transactions 
                     WHERE portfolio_id = ?
                     ORDER BY timestamp DESC
@@ -425,8 +430,10 @@ class PortfolioDatabase:
                         shares=row[4],
                         price=row[5],
                         total_amount=row[6],
-                        timestamp=datetime.fromisoformat(row[7]),
-                        notes=row[8]
+                        pnl=row[7],
+                        pnl_percentage=row[8],
+                        timestamp=datetime.fromisoformat(row[9]),
+                        notes=row[10]
                     ))
                 
                 return transactions
